@@ -8,6 +8,7 @@ import {
   SendOutlined,
   TranslationOutlined,
   InboxOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -35,6 +36,7 @@ export default function AppLayout() {
     { key: '/proxies', icon: <GlobalOutlined />, label: t('nav.proxies') },
     { key: '/temp-mail-providers', icon: <InboxOutlined />, label: t('nav.tempMailProviders') },
     { key: '/push-templates', icon: <SendOutlined />, label: t('nav.pushTemplates') },
+    { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
   ]
 
   const langMenuItems = [

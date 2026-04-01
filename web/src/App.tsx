@@ -10,6 +10,7 @@ import TaskList from './pages/TaskList'
 import AccountList from './pages/AccountList'
 import ProxyManager from './pages/ProxyManager'
 import PushTemplateManager from './pages/PushTemplateManager'
+import SystemSettings from './pages/SystemSettings'
 import TempMailProviderManager from './pages/TempMailProviderManager'
 import { useAuthStore } from './store/auth'
 
@@ -41,6 +42,7 @@ export default function App() {
               <Route path="tasks" element={<TaskList />} />
               <Route path="accounts" element={<AccountList />} />
               <Route path="proxies" element={<ProxyManager />} />
+              <Route path="settings" element={<SystemSettings />} />
               <Route path="temp-mail-providers" element={<TempMailProviderManager />} />
               <Route path="push-templates" element={<PushTemplateManager />} />
             </Route>

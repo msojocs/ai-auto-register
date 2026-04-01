@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  App as AntdApp,
   Table,
   Button,
   Modal,
@@ -11,16 +12,16 @@ import {
   Space,
   Typography,
   Popconfirm,
-  message,
   DatePicker,
+  type TableProps,
 } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
 import { useTranslation } from 'react-i18next'
 import StatusTag from '../components/StatusTag'
 import TaskProgress from '../components/TaskProgress'
 import { getTasks, createTask, startTask, pauseTask, deleteTask, type TaskBatch } from '../api/tasks'
 import { getTempMailProviders, type TempMailProvider } from '../api/tempMailProviders'
+import { getProxyGroups, type ProxyGroup } from '../api/proxyGroups'
 import dayjs from 'dayjs'
 
 const { Title } = Typography
@@ -34,8 +35,7 @@ type WizardValues = {
   name?: string
   type?: string
   total?: number
-  proxy_group?: string
-  mail_domain?: string
+  proxy_group_id?: number | ''
   temp_mail_provider_id?: number | ''
   concurrency?: number
   scheduled_at?: dayjs.Dayjs
@@ -50,8 +50,10 @@ export default function TaskList() {
   const [submitting, setSubmitting] = useState(false)
   const [progressTaskId, setProgressTaskId] = useState<number | null>(null)
   const [tempMailProviders, setTempMailProviders] = useState<TempMailProvider[]>([])
+  const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([])
   const [form] = Form.useForm()
   const { t } = useTranslation()
+  const { message } = AntdApp.useApp()
 
   async function fetchTasks() {
     setLoading(true)
@@ -74,9 +76,19 @@ export default function TaskList() {
     }
   }
 
+  async function fetchProxyGroups() {
+    try {
+      const { data } = await getProxyGroups()
+      setProxyGroups(data.groups ?? [])
+    } catch {
+      setProxyGroups([])
+    }
+  }
+
   useEffect(() => {
     fetchTasks()
     fetchTempMailProviders()
+    fetchProxyGroups()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -99,8 +111,7 @@ export default function TaskList() {
       setSubmitting(true)
       try {
         const cfg: Record<string, unknown> = {
-          proxy_group: merged.proxy_group,
-          mail_domain: merged.mail_domain,
+          proxy_group_id: merged.proxy_group_id,
           concurrency: merged.concurrency ?? 5,
           scheduled_at: merged.scheduled_at?.toISOString(),
         }
@@ -155,7 +166,7 @@ export default function TaskList() {
     }
   }
 
-  const columns: ColumnsType<TaskBatch> = [
+  const columns: TableProps<TaskBatch>['columns'] = [
     { title: t('common.name'), dataIndex: 'name', key: 'name' },
     { title: t('common.type'), dataIndex: 'type', key: 'type' },
     {
@@ -288,11 +299,12 @@ export default function TaskList() {
                   ]}
                 />
               </Form.Item>
-              <Form.Item name="proxy_group" label={t('tasks.proxyGroup')}>
-                <Input placeholder={t('tasks.proxyGroupPlaceholder')} />
-              </Form.Item>
-              <Form.Item name="mail_domain" label={t('tasks.mailDomain')}>
-                <Input placeholder={t('tasks.mailDomainPlaceholder')} />
+              <Form.Item name="proxy_group_id" label={t('tasks.proxyGroup')}>
+                <Select
+                  allowClear
+                  placeholder={t('tasks.proxyGroupPlaceholder')}
+                  options={proxyGroups.map((group) => ({ value: group.id, label: group.name }))}
+                />
               </Form.Item>
             </>
           )}

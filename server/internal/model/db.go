@@ -42,7 +42,7 @@ func InitDB(driver, dsn string) error {
 		return fmt.Errorf("failed to open database (%s): %w", driver, err)
 	}
 	DB = db
-	return db.AutoMigrate(&User{}, &TaskBatch{}, &Account{}, &Proxy{}, &CaptchaLog{}, &PushTemplate{}, &TempMailProvider{})
+	return db.AutoMigrate(&User{}, &TaskBatch{}, &Account{}, &ProxyGroup{}, &Proxy{}, &CaptchaLog{}, &PushTemplate{}, &TempMailProvider{})
 }
 
 // SeedPushTemplate seeds the built-in CPA push template if no system template exists.

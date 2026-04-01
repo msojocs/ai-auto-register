@@ -13,12 +13,13 @@ import (
 )
 
 type ProxyService struct {
-	repo     repository.ProxyRepository
-	resource *resource.ProxyResource
+	repo      repository.ProxyRepository
+	groupRepo repository.ProxyGroupRepository
+	resource  *resource.ProxyResource
 }
 
-func NewProxyService(repo repository.ProxyRepository, res *resource.ProxyResource) *ProxyService {
-	return &ProxyService{repo: repo, resource: res}
+func NewProxyService(repo repository.ProxyRepository, groupRepo repository.ProxyGroupRepository, res *resource.ProxyResource) *ProxyService {
+	return &ProxyService{repo: repo, groupRepo: groupRepo, resource: res}
 }
 
 func (s *ProxyService) List(page, limit int) ([]model.Proxy, int64, error) {
@@ -26,29 +27,39 @@ func (s *ProxyService) List(page, limit int) ([]model.Proxy, int64, error) {
 	return s.repo.List(offset, limit)
 }
 
-func (s *ProxyService) Create(host, port, username, password, protocol string) (*model.Proxy, error) {
+func (s *ProxyService) Create(host, port string, proxyGroupID *uint, username, password, protocol string) (*model.Proxy, error) {
 	if host == "" || port == "" {
 		return nil, errors.New("host and port are required")
 	}
 	if protocol == "" {
 		protocol = "http"
 	}
+	if proxyGroupID != nil {
+		group, err := s.groupRepo.FindByID(*proxyGroupID)
+		if err != nil {
+			return nil, err
+		}
+		if group == nil {
+			return nil, errors.New("proxy group not found")
+		}
+	}
 	proxy := &model.Proxy{
-		Host:     host,
-		Port:     port,
-		Username: username,
-		Password: password,
-		Protocol: protocol,
-		Status:   "active",
+		Host:         host,
+		Port:         port,
+		ProxyGroupID: proxyGroupID,
+		Username:     username,
+		Password:     password,
+		Protocol:     protocol,
+		Status:       "active",
 	}
 	if err := s.repo.Create(proxy); err != nil {
 		return nil, err
 	}
 	s.resource.Reload()
-	return proxy, nil
+	return s.repo.FindByID(proxy.ID)
 }
 
-func (s *ProxyService) Update(id uint, host, port, username, password, protocol string) (*model.Proxy, error) {
+func (s *ProxyService) Update(id uint, host, port string, proxyGroupID *uint, username, password, protocol string) (*model.Proxy, error) {
 	proxy, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, err
@@ -56,8 +67,18 @@ func (s *ProxyService) Update(id uint, host, port, username, password, protocol 
 	if proxy == nil {
 		return nil, errors.New("proxy not found")
 	}
+	if proxyGroupID != nil {
+		group, err := s.groupRepo.FindByID(*proxyGroupID)
+		if err != nil {
+			return nil, err
+		}
+		if group == nil {
+			return nil, errors.New("proxy group not found")
+		}
+	}
 	proxy.Host = host
 	proxy.Port = port
+	proxy.ProxyGroupID = proxyGroupID
 	proxy.Username = username
 	proxy.Password = password
 	proxy.Protocol = protocol
@@ -65,7 +86,7 @@ func (s *ProxyService) Update(id uint, host, port, username, password, protocol 
 		return nil, err
 	}
 	s.resource.Reload()
-	return proxy, nil
+	return s.repo.FindByID(proxy.ID)
 }
 
 func (s *ProxyService) Delete(id uint) error {

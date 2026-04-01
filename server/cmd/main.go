@@ -47,6 +47,7 @@ func main() {
 	taskRepo := repository.NewTaskRepository(model.DB)
 	accountRepo := repository.NewAccountRepository(model.DB)
 	proxyRepo := repository.NewProxyRepository(model.DB)
+	proxyGroupRepo := repository.NewProxyGroupRepository(model.DB)
 	pushTemplateRepo := repository.NewPushTemplateRepository(model.DB)
 
 	// Service layer (uses repositories)
@@ -59,9 +60,10 @@ func main() {
 		log.Printf("Created default admin account: %s", defaultAdmin.Username)
 		log.Println("WARNING: change the default admin password immediately after first login.")
 	}
-	taskSvc := service.NewTaskService(taskRepo, pool, model.DB)
+	taskSvc := service.NewTaskService(taskRepo, pool, model.DB, proxyRes)
 	accountSvc := service.NewAccountService(accountRepo)
-	proxySvc := service.NewProxyService(proxyRepo, proxyRes)
+	proxySvc := service.NewProxyService(proxyRepo, proxyGroupRepo, proxyRes)
+	proxyGroupSvc := service.NewProxyGroupService(proxyGroupRepo, proxyRepo)
 	pushTemplateSvc := service.NewPushTemplateService(pushTemplateRepo, accountRepo)
 	tempMailProviderRepo := repository.NewTempMailProviderRepository(model.DB)
 	tempMailProviderSvc := service.NewTempMailProviderService(tempMailProviderRepo)
@@ -73,12 +75,13 @@ func main() {
 	taskH := handler.NewTaskHandler(taskSvc)
 	accountH := handler.NewAccountHandler(accountSvc)
 	proxyH := handler.NewProxyHandler(proxySvc)
+	proxyGroupH := handler.NewProxyGroupHandler(proxyGroupSvc)
 	captchaH := handler.NewCaptchaHandler(captchaRes)
 	dashboardH := handler.NewDashboardHandler(model.DB)
 	pushTemplateH := handler.NewPushTemplateHandler(pushTemplateSvc)
 	tempMailProviderH := handler.NewTempMailProviderHandler(tempMailProviderSvc)
 
-	r := api.SetupRouter(authH, taskH, accountH, proxyH, captchaH, dashboardH, pushTemplateH, tempMailProviderH, authSvc)
+	r := api.SetupRouter(authH, taskH, accountH, proxyH, proxyGroupH, captchaH, dashboardH, pushTemplateH, tempMailProviderH, authSvc)
 
 	log.Printf("Server starting on :%s", cfg.Server.Port)
 	if err := r.Run(":" + cfg.Server.Port); err != nil {

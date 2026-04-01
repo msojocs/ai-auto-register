@@ -26,7 +26,7 @@ func (r *proxyRepository) Update(proxy *model.Proxy) error {
 
 func (r *proxyRepository) FindByID(id uint) (*model.Proxy, error) {
 	var proxy model.Proxy
-	err := r.db.First(&proxy, id).Error
+	err := r.db.Preload("ProxyGroup").First(&proxy, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -37,13 +37,13 @@ func (r *proxyRepository) List(offset, limit int) ([]model.Proxy, int64, error) 
 	var proxies []model.Proxy
 	var total int64
 	r.db.Model(&model.Proxy{}).Count(&total)
-	err := r.db.Order("created_at desc").Offset(offset).Limit(limit).Find(&proxies).Error
+	err := r.db.Preload("ProxyGroup").Order("created_at desc").Offset(offset).Limit(limit).Find(&proxies).Error
 	return proxies, total, err
 }
 
 func (r *proxyRepository) ListActive() ([]model.Proxy, error) {
 	var proxies []model.Proxy
-	err := r.db.Where("status = ?", "active").Find(&proxies).Error
+	err := r.db.Preload("ProxyGroup").Where("status = ?", "active").Find(&proxies).Error
 	return proxies, err
 }
 
@@ -54,5 +54,11 @@ func (r *proxyRepository) Delete(id uint) error {
 func (r *proxyRepository) CountByStatus(status string) (int64, error) {
 	var count int64
 	err := r.db.Model(&model.Proxy{}).Where("status = ?", status).Count(&count).Error
+	return count, err
+}
+
+func (r *proxyRepository) CountByGroupID(id uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&model.Proxy{}).Where("proxy_group_id = ?", id).Count(&count).Error
 	return count, err
 }

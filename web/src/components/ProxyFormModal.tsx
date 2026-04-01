@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Modal, Form, Input, Select } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { CreateProxyPayload, Proxy } from '../api/proxies'
+import type { ProxyGroup } from '../api/proxyGroups'
 
 const PROXY_PROTOCOLS = ['http', 'https', 'socks5'] as const
 
@@ -11,6 +12,7 @@ interface ProxyFormModalProps {
   open: boolean
   submitting: boolean
   proxy?: Proxy | null
+  groups: ProxyGroup[]
   onCancel: () => void
   onSubmit: (values: ProxyFormValues) => void | Promise<void>
 }
@@ -19,6 +21,7 @@ export default function ProxyFormModal({
   open,
   submitting,
   proxy,
+  groups,
   onCancel,
   onSubmit,
 }: ProxyFormModalProps) {
@@ -35,6 +38,7 @@ export default function ProxyFormModal({
       form.setFieldsValue({
         host: proxy.host,
         port: proxy.port,
+        proxy_group_id: proxy.proxy_group_id,
         protocol: proxy.protocol || 'http',
         username: proxy.username || undefined,
         password: proxy.password || undefined,
@@ -45,6 +49,7 @@ export default function ProxyFormModal({
     form.setFieldsValue({
       host: '',
       port: '',
+      proxy_group_id: undefined,
       protocol: 'http',
       username: undefined,
       password: undefined,
@@ -68,6 +73,13 @@ export default function ProxyFormModal({
         </Form.Item>
         <Form.Item name="port" label={t('proxies.port')} rules={[{ required: true }]}>
           <Input placeholder={t('proxies.portPlaceholder')} />
+        </Form.Item>
+        <Form.Item name="proxy_group_id" label={t('proxies.group')} rules={[{ required: true }]}>
+          <Select
+            allowClear
+            placeholder={t('proxies.groupPlaceholder')}
+            options={groups.map((group) => ({ value: group.id, label: group.name }))}
+          />
         </Form.Item>
         <Form.Item name="protocol" label={t('proxies.protocol')} rules={[{ required: true }]} initialValue="http">
           <Select>

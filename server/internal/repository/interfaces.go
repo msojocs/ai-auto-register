@@ -43,6 +43,16 @@ type ProxyRepository interface {
 	ListActive() ([]model.Proxy, error)
 	Delete(id uint) error
 	CountByStatus(status string) (int64, error)
+	CountByGroupID(id uint) (int64, error)
+}
+
+type ProxyGroupRepository interface {
+	Create(group *model.ProxyGroup) error
+	FindByID(id uint) (*model.ProxyGroup, error)
+	FindByName(name string) (*model.ProxyGroup, error)
+	List() ([]model.ProxyGroup, error)
+	Update(group *model.ProxyGroup) error
+	Delete(id uint) error
 }
 
 // CaptchaRepository defines operations on the CaptchaLog entity.

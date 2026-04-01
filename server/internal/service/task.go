@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,6 +14,7 @@ import (
 	"github.com/msojocs/free2api/server/internal/executor"
 	"github.com/msojocs/free2api/server/internal/model"
 	"github.com/msojocs/free2api/server/internal/repository"
+	"github.com/msojocs/free2api/server/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -21,10 +24,11 @@ type TaskService struct {
 	repo     repository.TaskRepository
 	pool     *core.WorkerPool
 	db       *gorm.DB
+	proxyRes *resource.ProxyResource
 }
 
-func NewTaskService(repo repository.TaskRepository, pool *core.WorkerPool, db *gorm.DB) *TaskService {
-	return &TaskService{repo: repo, pool: pool, db: db}
+func NewTaskService(repo repository.TaskRepository, pool *core.WorkerPool, db *gorm.DB, proxyRes *resource.ProxyResource) *TaskService {
+	return &TaskService{repo: repo, pool: pool, db: db, proxyRes: proxyRes}
 }
 
 func (s *TaskService) List(page, limit int) ([]model.TaskBatch, int64, error) {
@@ -111,6 +115,7 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 		taskID := task.ID
 		taskType := task.Type
 		cfg := map[string]interface{}(task.Config)
+		cfg = s.resolveProxyConfig(cfg)
 		// If the task config references a temp mail provider by ID, resolve it
 		// and merge the provider's settings into the job config so executors
 		// receive mail_provider + mail_* keys transparently.
@@ -208,6 +213,72 @@ func (s *TaskService) GetLogs(id uint) ([]string, error) {
 		return []string{}, nil
 	}
 	return strings.Split(task.Logs, "\n"), nil
+}
+
+func (s *TaskService) resolveProxyConfig(cfg map[string]interface{}) map[string]interface{} {
+	if strings.TrimSpace(taskConfigString(cfg, "proxy")) != "" {
+		return cfg
+	}
+	if s.proxyRes == nil {
+		return cfg
+	}
+	var proxy *model.Proxy
+	if groupID := taskConfigUint(cfg, "proxy_group_id"); groupID > 0 {
+		proxy = s.proxyRes.NextByGroupID(groupID)
+	} else {
+		group := strings.TrimSpace(taskConfigString(cfg, "proxy_group"))
+		if group != "" {
+			proxy = s.proxyRes.NextByGroupName(group)
+		}
+	}
+	if proxy == nil {
+		return cfg
+	}
+
+	merged := make(map[string]interface{}, len(cfg)+1)
+	for k, v := range cfg {
+		merged[k] = v
+	}
+	merged["proxy"] = buildProxyURL(proxy)
+	return merged
+}
+
+func taskConfigString(cfg map[string]interface{}, key string) string {
+	if value, ok := cfg[key]; ok {
+		if str, ok := value.(string); ok {
+			return str
+		}
+	}
+	return ""
+}
+
+func taskConfigUint(cfg map[string]interface{}, key string) uint {
+	if value, ok := cfg[key]; ok {
+		switch typed := value.(type) {
+		case float64:
+			return uint(typed)
+		case int:
+			return uint(typed)
+		case uint:
+			return typed
+		}
+	}
+	return 0
+}
+
+func buildProxyURL(proxy *model.Proxy) string {
+	protocol := strings.TrimSpace(proxy.Protocol)
+	if protocol == "" {
+		protocol = "http"
+	}
+	u := &url.URL{
+		Scheme: protocol,
+		Host:   net.JoinHostPort(proxy.Host, proxy.Port),
+	}
+	if proxy.Username != "" || proxy.Password != "" {
+		u.User = url.UserPassword(proxy.Username, proxy.Password)
+	}
+	return u.String()
 }
 
 // resolveMailProviderConfig looks up temp_mail_provider_id in cfg, loads the

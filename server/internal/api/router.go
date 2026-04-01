@@ -36,6 +36,7 @@ func SetupRouter(
 	taskH *handler.TaskHandler,
 	accountH *handler.AccountHandler,
 	proxyH *handler.ProxyHandler,
+	proxyGroupH *handler.ProxyGroupHandler,
 	captchaH *handler.CaptchaHandler,
 	dashboardH *handler.DashboardHandler,
 	pushTemplateH *handler.PushTemplateHandler,
@@ -91,6 +92,14 @@ func SetupRouter(
 			proxies.DELETE("/:id", proxyH.Delete)
 			proxies.POST("/:id/test", proxyH.Test)
 			proxies.PUT("/:id", proxyH.Update)
+		}
+
+		proxyGroups := api.Group("/proxy-groups")
+		{
+			proxyGroups.GET("", proxyGroupH.List)
+			proxyGroups.POST("", proxyGroupH.Create)
+			proxyGroups.PUT("/:id", proxyGroupH.Update)
+			proxyGroups.DELETE("/:id", proxyGroupH.Delete)
 		}
 
 		captcha := api.Group("/captcha")

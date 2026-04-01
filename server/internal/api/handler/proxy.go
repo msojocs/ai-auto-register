@@ -35,17 +35,18 @@ func (h *ProxyHandler) List(c *gin.Context) {
 
 func (h *ProxyHandler) Create(c *gin.Context) {
 	var req struct {
-		Host     string `json:"host" binding:"required"`
-		Port     string `json:"port" binding:"required"`
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Protocol string `json:"protocol"`
+		Host         string `json:"host" binding:"required"`
+		Port         string `json:"port" binding:"required"`
+		ProxyGroupID *uint  `json:"proxy_group_id"`
+		Username     string `json:"username"`
+		Password     string `json:"password"`
+		Protocol     string `json:"protocol"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	proxy, err := h.svc.Create(req.Host, req.Port, req.Username, req.Password, req.Protocol)
+	proxy, err := h.svc.Create(req.Host, req.Port, req.ProxyGroupID, req.Username, req.Password, req.Protocol)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -60,17 +61,18 @@ func (h *ProxyHandler) Update(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Host     string `json:"host" binding:"required"`
-		Port     string `json:"port" binding:"required"`
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Protocol string `json:"protocol"`
+		Host         string `json:"host" binding:"required"`
+		Port         string `json:"port" binding:"required"`
+		ProxyGroupID *uint  `json:"proxy_group_id"`
+		Username     string `json:"username"`
+		Password     string `json:"password"`
+		Protocol     string `json:"protocol"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	proxy, err := h.svc.Update(uint(id), req.Host, req.Port, req.Username, req.Password, req.Protocol)
+	proxy, err := h.svc.Update(uint(id), req.Host, req.Port, req.ProxyGroupID, req.Username, req.Password, req.Protocol)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

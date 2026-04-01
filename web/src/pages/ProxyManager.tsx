@@ -12,12 +12,14 @@ import {
 import { EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { getProxies, createProxy, updateProxy, deleteProxy, testProxy, type CreateProxyPayload, type Proxy } from '../api/proxies'
+import { getProxyGroups, type ProxyGroup } from '../api/proxyGroups'
 import ProxyFormModal, { type ProxyFormValues } from '../components/ProxyFormModal'
 
 const { Title } = Typography
 
 export default function ProxyManager() {
   const [proxies, setProxies] = useState<Proxy[]>([])
+  const [groups, setGroups] = useState<ProxyGroup[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingProxy, setEditingProxy] = useState<Proxy | null>(null)
@@ -38,8 +40,18 @@ export default function ProxyManager() {
     }
   }
 
+  async function fetchGroups() {
+    try {
+      const { data } = await getProxyGroups()
+      setGroups(data.groups ?? [])
+    } catch {
+      setGroups([])
+    }
+  }
+
   useEffect(() => {
     fetchProxies()
+    fetchGroups()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -47,6 +59,7 @@ export default function ProxyManager() {
     return {
       host: values.host.trim(),
       port: values.port.trim(),
+      proxy_group_id: values.proxy_group_id || undefined,
       protocol: values.protocol,
       username: values.username?.trim() || undefined,
       password: values.password?.trim() || undefined,
@@ -83,6 +96,7 @@ export default function ProxyManager() {
 
       closeModal()
       await fetchProxies()
+      await fetchGroups()
     } catch {
       message.error(editingProxy ? t('proxies.failedToUpdate') : t('proxies.failedToAdd'))
     } finally {
@@ -117,6 +131,12 @@ export default function ProxyManager() {
   const columns: TableProps<Proxy>['columns'] = [
     { title: t('proxies.host'), dataIndex: 'host', key: 'host' },
     { title: t('proxies.port'), dataIndex: 'port', key: 'port' },
+    {
+      title: t('proxies.group'),
+      dataIndex: 'proxy_group',
+      key: 'group',
+      render: (_, record) => record.proxy_group?.name || <Tag>{t('proxies.noGroup')}</Tag>,
+    },
     { title: t('proxies.protocol'), dataIndex: 'protocol', key: 'protocol' },
     { title: t('proxies.username'), dataIndex: 'username', key: 'username' },
     {
@@ -189,6 +209,7 @@ export default function ProxyManager() {
       <ProxyFormModal
         open={modalOpen}
         proxy={editingProxy}
+        groups={groups}
         onCancel={closeModal}
         onSubmit={handleSubmit}
         submitting={submitting}
