@@ -4,8 +4,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-
-	"gorm.io/gorm"
 )
 
 type TaskStatus string
@@ -46,7 +44,7 @@ func (j *JSONMap) Scan(value interface{}) error {
 }
 
 type TaskBatch struct {
-	gorm.Model
+	BaseModel
 	Name      string     `gorm:"not null" json:"name"`
 	Type      string     `gorm:"not null" json:"type"`
 	Status    TaskStatus `gorm:"default:'pending'" json:"status"`

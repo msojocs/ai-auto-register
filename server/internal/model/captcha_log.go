@@ -1,9 +1,7 @@
 package model
 
-import "gorm.io/gorm"
-
 type CaptchaLog struct {
-	gorm.Model
+	BaseModel
 	TaskBatchID uint    `json:"task_batch_id"`
 	Email       string  `json:"email"`
 	Type        string  `json:"type"`

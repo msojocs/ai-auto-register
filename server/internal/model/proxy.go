@@ -1,9 +1,7 @@
 package model
 
-import "gorm.io/gorm"
-
 type Proxy struct {
-	gorm.Model
+	BaseModel
 	Host     string `gorm:"not null" json:"host"`
 	Port     string `gorm:"not null" json:"port"`
 	Username string `json:"username"`

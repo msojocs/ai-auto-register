@@ -1,9 +1,7 @@
 package model
 
-import "gorm.io/gorm"
-
 type PushTemplate struct {
-	gorm.Model
+	BaseModel
 	Name         string `gorm:"not null" json:"name"`
 	Enabled      bool   `gorm:"default:true" json:"enabled"`
 	URL          string `gorm:"not null" json:"url"`

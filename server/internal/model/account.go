@@ -1,9 +1,7 @@
 package model
 
-import "gorm.io/gorm"
-
 type Account struct {
-	gorm.Model
+	BaseModel
 	Email       string `gorm:"index" json:"email"`
 	Password    string `json:"password"`
 	Type        string `json:"type"`
