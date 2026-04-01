@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"strings"
@@ -87,7 +89,7 @@ func (s *TaskService) Start(id uint) error {
 	if task.Status == model.TaskStatusRunning {
 		return errors.New("task is already running")
 	}
-	if err := s.repo.UpdateFields(id, map[string]interface{}{"status": model.TaskStatusRunning}); err != nil {
+	if err := s.repo.UpdateFields(id, map[string]interface{}{"status": model.TaskStatusRunning, "logs": ""}); err != nil {
 		return err
 	}
 	task.Status = model.TaskStatusRunning
@@ -96,6 +98,7 @@ func (s *TaskService) Start(id uint) error {
 }
 
 func (s *TaskService) dispatchJobs(task model.TaskBatch) {
+	log.Printf("Dispatching jobs for task %d: total=%d\n", task.ID, task.Total)
 	total := task.Total
 	if total <= 0 {
 		total = 1
@@ -108,6 +111,7 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 			break
 		}
 		if current.Status == model.TaskStatusPaused {
+			log.Printf("Task %d is paused, stopping dispatch\n", task.ID)
 			return
 		}
 
@@ -127,16 +131,24 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 			ID: uint(jobID),
 			Execute: func(ctx context.Context, publish func(core.ProgressUpdate)) {
 				defer wg.Done()
+				publishWithLog := func(update core.ProgressUpdate) {
+					s.appendProgressLog(taskID, update)
+					publish(update)
+				}
 				var exec executor.Executor
+				log.Printf("Job type: %s\n", taskType)
 				switch taskType {
 				case "chatgpt":
 					exec = executor.NewChatGPTExecutor(db)
 				case "cursor":
 					exec = executor.NewCursorExecutor(db)
 				default:
+					log.Printf("Unknown job type: %s\n", taskType)
 					return
 				}
-				err := exec.Execute(ctx, taskID, cfg, publish)
+				log.Printf("Starting job %d for task %d\n", jobID, taskID)
+				err := exec.Execute(ctx, taskID, cfg, publishWithLog)
+
 				if err != nil {
 					s.repo.UpdateFields(taskID, map[string]interface{}{
 						"failed": gorm.Expr("failed + ?", 1),
@@ -185,6 +197,7 @@ func (s *TaskService) Retry(id uint) error {
 	if err := s.repo.UpdateFields(id, map[string]interface{}{
 		"status": model.TaskStatusRunning,
 		"failed": 0,
+		"logs":   "",
 	}); err != nil {
 		return err
 	}
@@ -201,7 +214,7 @@ func (s *TaskService) Unsubscribe(taskID uint, ch chan core.ProgressUpdate) {
 	s.pool.Unsubscribe(taskID, ch)
 }
 
-func (s *TaskService) GetLogs(id uint) ([]string, error) {
+func (s *TaskService) GetLogs(id uint) ([]core.ProgressUpdate, error) {
 	task, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, err
@@ -210,9 +223,39 @@ func (s *TaskService) GetLogs(id uint) ([]string, error) {
 		return nil, errors.New("task not found")
 	}
 	if task.Logs == "" {
-		return []string{}, nil
+		return []core.ProgressUpdate{}, nil
 	}
-	return strings.Split(task.Logs, "\n"), nil
+
+	entries := make([]core.ProgressUpdate, 0)
+	for _, line := range strings.Split(task.Logs, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var entry core.ProgressUpdate
+		if err := json.Unmarshal([]byte(line), &entry); err == nil {
+			entries = append(entries, entry)
+			continue
+		}
+		entries = append(entries, core.ProgressUpdate{TaskID: id, Message: line})
+	}
+	return entries, nil
+}
+
+func (s *TaskService) appendProgressLog(taskID uint, update core.ProgressUpdate) {
+	line, err := json.Marshal(update)
+	if err != nil {
+		return
+	}
+	value := string(line) + "\n"
+	fields := map[string]interface{}{}
+	switch s.db.Dialector.Name() {
+	case "mysql":
+		fields["logs"] = gorm.Expr("CONCAT(COALESCE(logs, ''), ?)", value)
+	default:
+		fields["logs"] = gorm.Expr("COALESCE(logs, '') || ?", value)
+	}
+	_ = s.repo.UpdateFields(taskID, fields)
 }
 
 func (s *TaskService) resolveProxyConfig(cfg map[string]interface{}) map[string]interface{} {

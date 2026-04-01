@@ -12,6 +12,13 @@ export interface TaskBatch {
   created_at: string
 }
 
+export interface TaskProgressLog {
+  task_id: number
+  progress: number
+  message: string
+  status: string
+}
+
 export interface CreateTaskPayload {
   name: string
   type: string
@@ -37,4 +44,8 @@ export function pauseTask(id: number) {
 
 export function deleteTask(id: number) {
   return api.delete(`/tasks/${id}`)
+}
+
+export function getTaskLogs(id: number) {
+  return api.get<{ logs: TaskProgressLog[] }>(`/tasks/${id}/logs`)
 }

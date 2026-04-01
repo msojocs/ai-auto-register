@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Modal, Progress, List, Typography, Badge } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
+import { getTaskLogs, type TaskProgressLog } from '../api/tasks'
 
 const { Text } = Typography
 
@@ -11,15 +12,9 @@ interface TaskProgressProps {
   onClose: () => void
 }
 
-interface ProgressEvent {
-  progress: number
-  message: string
-  status?: string
-}
-
 export default function TaskProgress({ taskId, open, onClose }: TaskProgressProps) {
   const [percent, setPercent] = useState(0)
-  const [logs, setLogs] = useState<ProgressEvent[]>([])
+  const [logs, setLogs] = useState<TaskProgressLog[]>([])
   const token = useAuthStore((s) => s.token)
   const abortRef = useRef<AbortController | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
@@ -36,6 +31,13 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
 
     void (async () => {
       try {
+        const { data: logData } = await getTaskLogs(taskId)
+        const initialLogs = logData.logs ?? []
+        setLogs(initialLogs)
+        if (initialLogs.length > 0) {
+          setPercent(initialLogs[initialLogs.length - 1].progress ?? 0)
+        }
+
         const response = await fetch(`/api/tasks/${taskId}/progress`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           signal: controller.signal,
@@ -78,9 +80,21 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
 
             if (eventName === 'progress' && dataLines.length > 0) {
               try {
-                const data = JSON.parse(dataLines.join('\n')) as ProgressEvent
+                const data = JSON.parse(dataLines.join('\n')) as TaskProgressLog
                 setPercent(data.progress ?? 0)
-                setLogs((prev) => [...prev, data])
+                setLogs((prev) => {
+                  const last = prev[prev.length - 1]
+                  if (
+                    last &&
+                    last.task_id === data.task_id &&
+                    last.progress === data.progress &&
+                    last.message === data.message &&
+                    last.status === data.status
+                  ) {
+                    return prev
+                  }
+                  return [...prev, data]
+                })
               } catch {
                 // ignore parse errors
               }
