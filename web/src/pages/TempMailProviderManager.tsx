@@ -223,16 +223,20 @@ export default function TempMailProviderManager() {
           >
             {t('common.test')}
           </Button>
-          <Popconfirm
-            title={t('tempMail.deleteConfirm')}
-            onConfirm={() => handleDelete(record.id)}
-            okText={t('common.yes')}
-            cancelText={t('common.no')}
-          >
-            <Button size="small" danger>
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
+          {
+            !record.is_system && (
+            <Popconfirm
+              title={t('tempMail.deleteConfirm')}
+              onConfirm={() => handleDelete(record.id)}
+              okText={t('common.yes')}
+              cancelText={t('common.no')}
+            >
+              <Button size="small" danger>
+                {t('common.delete')}
+              </Button>
+            </Popconfirm>
+            )
+          }
         </Space>
       ),
     },

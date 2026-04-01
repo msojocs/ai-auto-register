@@ -8,6 +8,7 @@ export interface TempMailProvider {
   enabled: boolean
   description: string
   created_at: string
+  is_system: boolean
 }
 
 export interface CreateTempMailProviderPayload {
