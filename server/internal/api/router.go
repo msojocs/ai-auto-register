@@ -90,6 +90,7 @@ func SetupRouter(
 			proxies.POST("", proxyH.Create)
 			proxies.DELETE("/:id", proxyH.Delete)
 			proxies.POST("/:id/test", proxyH.Test)
+			proxies.PUT("/:id", proxyH.Update)
 		}
 
 		captcha := api.Group("/captcha")

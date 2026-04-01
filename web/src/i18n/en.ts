@@ -129,6 +129,8 @@ const en = {
   proxies: {
     title: 'Proxies',
     addProxy: 'Add Proxy',
+    newTitle: 'New Proxy',
+    editTitle: 'Edit Proxy: {{host}}',
     host: 'Host',
     hostPlaceholder: 'e.g. 192.168.1.1',
     port: 'Port',
@@ -142,6 +144,8 @@ const en = {
     failedToLoad: 'Failed to load proxies',
     added: 'Proxy added',
     failedToAdd: 'Failed to add proxy',
+    updated: 'Proxy updated',
+    failedToUpdate: 'Failed to update proxy',
     deleted: 'Proxy deleted',
     failedToDelete: 'Failed to delete proxy',
     reachable: 'Proxy is reachable',

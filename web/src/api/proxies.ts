@@ -26,6 +26,10 @@ export function createProxy(payload: CreateProxyPayload) {
   return api.post<{ proxy: Proxy }>('/proxies', payload)
 }
 
+export function updateProxy(id: number, payload: CreateProxyPayload) {
+  return api.put<{ proxy: Proxy }>(`/proxies/${id}`, payload)
+}
+
 export function deleteProxy(id: number) {
   return api.delete(`/proxies/${id}`)
 }

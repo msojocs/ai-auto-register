@@ -20,6 +20,10 @@ func (r *proxyRepository) Create(proxy *model.Proxy) error {
 	return r.db.Create(proxy).Error
 }
 
+func (r *proxyRepository) Update(proxy *model.Proxy) error {
+	return r.db.Save(proxy).Error
+}
+
 func (r *proxyRepository) FindByID(id uint) (*model.Proxy, error) {
 	var proxy model.Proxy
 	err := r.db.First(&proxy, id).Error

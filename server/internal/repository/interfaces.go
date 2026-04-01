@@ -37,6 +37,7 @@ type AccountRepository interface {
 // ProxyRepository defines operations on the Proxy entity.
 type ProxyRepository interface {
 	Create(proxy *model.Proxy) error
+	Update(proxy *model.Proxy) error
 	FindByID(id uint) (*model.Proxy, error)
 	List(offset, limit int) ([]model.Proxy, int64, error)
 	ListActive() ([]model.Proxy, error)

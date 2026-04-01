@@ -48,6 +48,26 @@ func (s *ProxyService) Create(host, port, username, password, protocol string) (
 	return proxy, nil
 }
 
+func (s *ProxyService) Update(id uint, host, port, username, password, protocol string) (*model.Proxy, error) {
+	proxy, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if proxy == nil {
+		return nil, errors.New("proxy not found")
+	}
+	proxy.Host = host
+	proxy.Port = port
+	proxy.Username = username
+	proxy.Password = password
+	proxy.Protocol = protocol
+	if err := s.repo.Update(proxy); err != nil {
+		return nil, err
+	}
+	s.resource.Reload()
+	return proxy, nil
+}
+
 func (s *ProxyService) Delete(id uint) error {
 	err := s.repo.Delete(id)
 	if err == nil {
@@ -79,4 +99,3 @@ func (s *ProxyService) Test(id uint) (bool, error) {
 	resp.Body.Close()
 	return resp.StatusCode < 500, nil
 }
-

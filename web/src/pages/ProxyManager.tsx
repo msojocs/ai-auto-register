@@ -3,31 +3,26 @@ import {
   App as AntdApp,
   Table,
   Button,
-  Modal,
-  Form,
-  Input,
   Space,
   Typography,
   Popconfirm,
   Tag,
-  Select,
   type TableProps,
 } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { getProxies, createProxy, deleteProxy, testProxy, type Proxy } from '../api/proxies'
+import { getProxies, createProxy, updateProxy, deleteProxy, testProxy, type CreateProxyPayload, type Proxy } from '../api/proxies'
+import ProxyFormModal, { type ProxyFormValues } from '../components/ProxyFormModal'
 
 const { Title } = Typography
-
-const PROXY_PROTOCOLS = ['http', 'https', 'socks5']
 
 export default function ProxyManager() {
   const [proxies, setProxies] = useState<Proxy[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const [editingProxy, setEditingProxy] = useState<Proxy | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [testingId, setTestingId] = useState<number | null>(null)
-  const [form] = Form.useForm()
   const { t } = useTranslation()
   const { message } = AntdApp.useApp()
 
@@ -48,16 +43,48 @@ export default function ProxyManager() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function handleAdd(values: { host: string; port: string; protocol: string; username?: string; password?: string }) {
+  function normalizePayload(values: ProxyFormValues): CreateProxyPayload {
+    return {
+      host: values.host.trim(),
+      port: values.port.trim(),
+      protocol: values.protocol,
+      username: values.username?.trim() || undefined,
+      password: values.password?.trim() || undefined,
+    }
+  }
+
+  function openCreate() {
+    setEditingProxy(null)
+    setModalOpen(true)
+  }
+
+  function openEdit(proxy: Proxy) {
+    setEditingProxy(proxy)
+    setModalOpen(true)
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+    setEditingProxy(null)
+  }
+
+  async function handleSubmit(values: ProxyFormValues) {
     setSubmitting(true)
+    const payload = normalizePayload(values)
+
     try {
-      await createProxy(values)
-      message.success(t('proxies.added'))
-      setModalOpen(false)
-      form.resetFields()
-      fetchProxies()
+      if (editingProxy) {
+        await updateProxy(editingProxy.id, payload)
+        message.success(t('proxies.updated'))
+      } else {
+        await createProxy(payload)
+        message.success(t('proxies.added'))
+      }
+
+      closeModal()
+      await fetchProxies()
     } catch {
-      message.error(t('proxies.failedToAdd'))
+      message.error(editingProxy ? t('proxies.failedToUpdate') : t('proxies.failedToAdd'))
     } finally {
       setSubmitting(false)
     }
@@ -67,7 +94,7 @@ export default function ProxyManager() {
     try {
       await deleteProxy(id)
       message.success(t('proxies.deleted'))
-      fetchProxies()
+      await fetchProxies()
     } catch {
       message.error(t('proxies.failedToDelete'))
     }
@@ -109,6 +136,13 @@ export default function ProxyManager() {
         <Space>
           <Button
             size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEdit(record)}
+          >
+            {t('common.edit')}
+          </Button>
+          <Button
+            size="small"
             loading={testingId === record.id}
             onClick={() => handleTest(record.id)}
           >
@@ -138,10 +172,7 @@ export default function ProxyManager() {
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          onClick={() => {
-            form.resetFields()
-            setModalOpen(true)
-          }}
+          onClick={openCreate}
         >
           {t('proxies.addProxy')}
         </Button>
@@ -155,39 +186,13 @@ export default function ProxyManager() {
         pagination={{ pageSize: 20 }}
       />
 
-      <Modal
-        title={t('proxies.addProxy')}
+      <ProxyFormModal
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        onOk={() => form.submit()}
-        confirmLoading={submitting}
-        okText={t('common.add')}
-        cancelText={t('common.cancel')}
-      >
-        <Form form={form} layout="vertical" onFinish={handleAdd}>
-          <Form.Item name="host" label={t('proxies.host')} rules={[{ required: true }]}>
-            <Input placeholder={t('proxies.hostPlaceholder')} />
-          </Form.Item>
-          <Form.Item name="port" label={t('proxies.port')} rules={[{ required: true }]}>
-            <Input placeholder={t('proxies.portPlaceholder')} />
-          </Form.Item>
-          <Form.Item name="protocol" label={t('proxies.protocol')} rules={[{ required: true }]} initialValue="http">
-            <Select>
-              {PROXY_PROTOCOLS.map((proto) => (
-                <Select.Option key={proto} value={proto}>
-                  {proto}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="username" label={t('proxies.username')}>
-            <Input placeholder={t('common.optional')} />
-          </Form.Item>
-          <Form.Item name="password" label={t('proxies.password')}>
-            <Input.Password placeholder={t('common.optional')} />
-          </Form.Item>
-        </Form>
-      </Modal>
+        proxy={editingProxy}
+        onCancel={closeModal}
+        onSubmit={handleSubmit}
+        submitting={submitting}
+      />
     </div>
   )
 }

@@ -129,6 +129,8 @@ const zh = {
   proxies: {
     title: '代理管理',
     addProxy: '添加代理',
+    newTitle: '新建代理',
+    editTitle: '编辑代理：{{host}}',
     host: '主机',
     hostPlaceholder: '例如：192.168.1.1',
     port: '端口',
@@ -142,6 +144,8 @@ const zh = {
     failedToLoad: '加载代理失败',
     added: '代理已添加',
     failedToAdd: '添加代理失败',
+    updated: '代理已更新',
+    failedToUpdate: '更新代理失败',
     deleted: '代理已删除',
     failedToDelete: '删除代理失败',
     reachable: '代理连通性正常',
