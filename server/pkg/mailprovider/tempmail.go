@@ -15,7 +15,8 @@ import (
 //
 // API: https://tempmail.lol/api
 // Config keys: (none required)
-//   api_url – override base URL (default: https://api.tempmail.lol/v2)
+//
+//	api_url – override base URL (default: https://api.tempmail.lol/v2)
 type TempMailLolProvider struct {
 	apiURL string
 	client *http.Client
@@ -88,7 +89,7 @@ func (p *TempMailLolProvider) GetEmail(ctx context.Context) (*MailAccount, error
 }
 
 type tempMailLolMsg struct {
-	ID      string `json:"id"`
+	ID      string `json:"_id"`
 	Subject string `json:"subject"`
 	Body    string `json:"body"`
 	HTML    string `json:"html"`
