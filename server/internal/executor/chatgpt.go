@@ -14,7 +14,6 @@ import (
 
 	"github.com/msojocs/free2api/server/internal/core"
 	"github.com/msojocs/free2api/server/internal/model"
-	"github.com/msojocs/free2api/server/pkg/captcha"
 	"github.com/msojocs/free2api/server/pkg/crypto"
 	"github.com/msojocs/free2api/server/pkg/mailprovider"
 	"golang.org/x/net/publicsuffix"
@@ -97,6 +96,34 @@ func (s *openAISession) jsonPost(ctx context.Context, useRedir bool, targetURL s
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	return data, resp.StatusCode, err
+}
+
+func (s *openAISession) checkIpLocation(ctx context.Context) error {
+	resp, err := s.withRedirect.Get("https://cloudflare.com/cdn-cgi/trace")
+	if err != nil {
+		return fmt.Errorf("IP location check failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	lines := strings.Split(string(body), "\n")
+	loc := ""
+	for _, line := range lines {
+		if strings.HasPrefix(line, "loc=") {
+			loc = strings.TrimPrefix(line, "loc=")
+			break
+		}
+	}
+	// OpenAI may block certain regions; adjust as needed.
+	blockedRegions := map[string]bool{
+		"CN": true,
+		"HK": true,
+		"MO": true,
+		"TW": true,
+	}
+	if blockedRegions[loc] {
+		return fmt.Errorf("IP geolocation check: access from region %s may be blocked by OpenAI", loc)
+	}
+	return nil
 }
 
 // step1SeedSession visits the signup page to obtain the CSRF token and session cookies.
@@ -291,41 +318,6 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 
 	proxyURL := cfgStr(config, "proxy", "")
 
-	// ── Temp email ────────────────────────────────────────────────────────────
-	mailProviderType := cfgStr(config, "mail_provider", "tempmail")
-	mailCfg := map[string]string{
-		"api_url":     cfgStr(config, "mail_api_url", ""),
-		"admin_token": cfgStr(config, "mail_admin_token", ""),
-		"domain":      cfgStr(config, "mail_domain", ""),
-	}
-	sendProgress(publish, taskID, 8, fmt.Sprintf("Initialising mail provider: %s", mailProviderType), "running")
-	mp, err := mailprovider.New(mailProviderType, mailCfg)
-	if err != nil {
-		sendProgress(publish, taskID, 100, fmt.Sprintf("Mail provider error: %v", err), "failed")
-		return nil, err
-	}
-
-	sendProgress(publish, taskID, 12, "Getting temporary email address…", "running")
-	mailAccount, err := mp.GetEmail(ctx)
-	if err != nil {
-		sendProgress(publish, taskID, 100, fmt.Sprintf("Get email failed: %v", err), "failed")
-		return nil, err
-	}
-	email := mailAccount.Email
-	sendProgress(publish, taskID, 18, fmt.Sprintf("Got email: %s", email), "running")
-
-	// ── Captcha solver (optional) ─────────────────────────────────────────────
-	captchaProvider := cfgStr(config, "captcha_provider", "")
-	captchaKey := cfgStr(config, "captcha_key", "")
-	_ = captchaProvider
-	_ = captchaKey
-	if captchaProvider != "" && captchaKey != "" {
-		if _, err := captcha.New(captchaProvider, captchaKey); err != nil {
-			sendProgress(publish, taskID, 100, fmt.Sprintf("Captcha provider error: %v", err), "failed")
-			return nil, err
-		}
-	}
-
 	// ── OpenAI HTTP session ───────────────────────────────────────────────────
 	sess, err := newOpenAISession(proxyURL)
 	if err != nil {
@@ -333,8 +325,39 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 		return nil, err
 	}
 
+	// Check location of the IP address, as OpenAI may block certain regions.
+	sendProgress(publish, taskID, 8, "Checking IP geolocation…", "running")
+	err = sess.checkIpLocation(ctx)
+	if err != nil {
+		sendProgress(publish, taskID, 100, fmt.Sprintf("IP location check failed: %v", err), "failed")
+		return nil, err
+	}
+
+	// ── Temp email ────────────────────────────────────────────────────────────
+	mailProviderType := cfgStr(config, "mail_provider", "tempmail")
+	mailCfg := map[string]string{
+		"api_url":     cfgStr(config, "mail_api_url", ""),
+		"admin_token": cfgStr(config, "mail_admin_token", ""),
+		"domain":      cfgStr(config, "mail_domain", ""),
+	}
+	sendProgress(publish, taskID, 12, fmt.Sprintf("Initialising mail provider: %s", mailProviderType), "running")
+	mp, err := mailprovider.New(mailProviderType, mailCfg)
+	if err != nil {
+		sendProgress(publish, taskID, 100, fmt.Sprintf("Mail provider error: %v", err), "failed")
+		return nil, err
+	}
+
+	sendProgress(publish, taskID, 22, "Getting temporary email address…", "running")
+	mailAccount, err := mp.GetEmail(ctx)
+	if err != nil {
+		sendProgress(publish, taskID, 100, fmt.Sprintf("Get email failed: %v", err), "failed")
+		return nil, err
+	}
+	email := mailAccount.Email
+	sendProgress(publish, taskID, 24, fmt.Sprintf("Got email: %s", email), "running")
+
 	// Step 1 – seed session / get state
-	sendProgress(publish, taskID, 25, "Step 1/5: Seeding registration session…", "running")
+	sendProgress(publish, taskID, 30, "Step 1/5: Seeding registration session…", "running")
 	state, err := sess.step1SeedSession(ctx)
 	if err != nil {
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Step 1 failed: %v", err), "failed")
@@ -354,6 +377,8 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Step 2 failed: %v", err), "failed")
 		return nil, err
 	}
+
+	// TODO: 已存在的处理 – 如果邮箱已存在，切换到登录流程。
 
 	// Step 3 – set password
 	password := randPassword()
