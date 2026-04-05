@@ -88,6 +88,7 @@ const en = {
     start: 'Start',
     pause: 'Pause',
     progress: 'Progress',
+    refreshList: 'Refresh List',
     deleteConfirm: 'Delete this task?',
     total: 'Total',
     done: 'Done',

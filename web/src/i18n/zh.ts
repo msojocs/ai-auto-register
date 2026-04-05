@@ -88,6 +88,7 @@ const zh = {
     start: '启动',
     pause: '暂停',
     progress: '进度',
+    refreshList: '刷新列表',
     deleteConfirm: '确定删除此任务？',
     total: '总数',
     done: '成功',

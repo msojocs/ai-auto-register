@@ -8,13 +8,66 @@ const { Text } = Typography
 
 interface TaskProgressProps {
   taskId: number | null
+  taskStatus?: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | null
   open: boolean
   onClose: () => void
 }
 
-export default function TaskProgress({ taskId, open, onClose }: TaskProgressProps) {
+type BatchStats = {
+  success: number
+  failed: number
+  total: number
+}
+
+const batchStatsPattern = /Batch progress:\s*\d+\/(\d+)\s*completed,\s*success=(\d+),\s*failed=(\d+)/i
+
+function parseBatchStats(message: string): BatchStats | null {
+  const match = batchStatsPattern.exec(message)
+  if (!match) {
+    return null
+  }
+  const total = Number(match[1])
+  const success = Number(match[2])
+  const failed = Number(match[3])
+  if (!Number.isFinite(total) || !Number.isFinite(success) || !Number.isFinite(failed)) {
+    return null
+  }
+  return {
+    total: Math.max(0, total),
+    success: Math.max(0, success),
+    failed: Math.max(0, failed),
+  }
+}
+
+function clamp01(value: number): number {
+  if (value < 0) {
+    return 0
+  }
+  if (value > 1) {
+    return 1
+  }
+  return value
+}
+
+function rgbLerp(from: number, to: number, t: number): number {
+  return Math.round(from + (to - from) * t)
+}
+
+function progressColorByFailureRate(stats: BatchStats | null): string {
+  if (!stats || stats.total <= 0) {
+    return '#52c41a'
+  }
+  const ratio = clamp01(stats.failed / stats.total)
+  const r = rgbLerp(82, 255, ratio)
+  const g = rgbLerp(196, 77, ratio)
+  const b = rgbLerp(26, 79, ratio)
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+export default function TaskProgress({ taskId, taskStatus, open, onClose }: TaskProgressProps) {
   const [percent, setPercent] = useState(0)
   const [logs, setLogs] = useState<TaskProgressLog[]>([])
+  const [batchStats, setBatchStats] = useState<BatchStats | null>(null)
   const token = useAuthStore((s) => s.token)
   const abortRef = useRef<AbortController | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
@@ -25,6 +78,7 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
 
     setPercent(0)
     setLogs([])
+  setBatchStats(null)
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -36,6 +90,17 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
         setLogs(initialLogs)
         if (initialLogs.length > 0) {
           setPercent(initialLogs[initialLogs.length - 1].progress ?? 0)
+          for (let i = initialLogs.length - 1; i >= 0; i -= 1) {
+            const stats = parseBatchStats(initialLogs[i].message ?? '')
+            if (stats) {
+              setBatchStats(stats)
+              break
+            }
+          }
+        }
+
+        if (taskStatus === 'completed') {
+          return
         }
 
         const response = await fetch(`/api/tasks/${taskId}/progress`, {
@@ -82,6 +147,10 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
               try {
                 const data = JSON.parse(dataLines.join('\n')) as TaskProgressLog
                 setPercent(data.progress ?? 0)
+                const stats = parseBatchStats(data.message ?? '')
+                if (stats) {
+                  setBatchStats(stats)
+                }
                 setLogs((prev) => {
                   const last = prev[prev.length - 1]
                   if (
@@ -112,7 +181,7 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
       controller.abort()
       abortRef.current = null
     }
-  }, [open, taskId, token])
+  }, [open, taskId, taskStatus, token])
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -123,8 +192,7 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
     abortRef.current = null
     onClose()
   }
-
-  const statusColor = percent >= 100 ? 'success' : 'active'
+  const progressColor = progressColorByFailureRate(batchStats)
 
   return (
     <Modal
@@ -134,7 +202,7 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
       footer={null}
       width={600}
     >
-      <Progress percent={percent} status={statusColor} style={{ marginBottom: 16 }} />
+      <Progress percent={percent} strokeColor={progressColor} style={{ marginBottom: 16 }} />
       <div
         style={{
           height: 240,
@@ -151,7 +219,7 @@ export default function TaskProgress({ taskId, open, onClose }: TaskProgressProp
           renderItem={(item, idx) => (
             <List.Item key={idx} style={{ padding: '2px 0', border: 'none' }}>
               <Badge
-                color={item.status === 'error' ? 'red' : item.status === 'completed' ? 'green' : 'blue'}
+                color={item.status === 'failed' ? 'red' : item.status === 'completed' ? 'green' : 'blue'}
                 text={<Text style={{ fontSize: 12 }}>{item.message}</Text>}
               />
             </List.Item>

@@ -22,6 +22,124 @@ import (
 
 var jobCounter uint64
 
+type taskProgressAggregator struct {
+	mu          sync.Mutex
+	total       int
+	inProgress  map[uint]int
+	finished    map[uint]bool
+	completed   int
+	failed      int
+	lastOverall int
+}
+
+func newTaskProgressAggregator(total int) *taskProgressAggregator {
+	if total <= 0 {
+		total = 1
+	}
+	return &taskProgressAggregator{
+		total:      total,
+		inProgress: make(map[uint]int),
+		finished:   make(map[uint]bool),
+	}
+}
+
+func (a *taskProgressAggregator) OnJobUpdate(jobID uint, update core.ProgressUpdate) core.ProgressUpdate {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.finished[jobID] {
+		update.Progress = a.lastOverall
+		return update
+	}
+
+	p := clampProgress(update.Progress)
+	if prev, ok := a.inProgress[jobID]; ok && p < prev {
+		// Keep each job monotonic to avoid per-job regressions leaking into overall progress.
+		p = prev
+	}
+	a.inProgress[jobID] = p
+
+	overall := a.computeOverallLocked()
+	finished := a.completed + a.failed
+
+	update.Progress = overall
+	if strings.TrimSpace(update.Message) != "" {
+		update.Message = fmt.Sprintf("[%d/%d] %s", finished, a.total, update.Message)
+	}
+	return update
+}
+
+func (a *taskProgressAggregator) OnJobDone(taskID, jobID uint, success bool) core.ProgressUpdate {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.finished[jobID] {
+		return core.ProgressUpdate{
+			TaskID:   taskID,
+			Progress: a.lastOverall,
+			Message:  a.summaryMessageLocked(),
+			Status:   "running",
+		}
+	}
+
+	a.finished[jobID] = true
+	delete(a.inProgress, jobID)
+	if success {
+		a.completed++
+	} else {
+		a.failed++
+	}
+
+	overall := a.computeOverallLocked()
+	status := "running"
+	if a.completed+a.failed >= a.total {
+		status = "completed"
+	}
+
+	return core.ProgressUpdate{
+		TaskID:   taskID,
+		Progress: overall,
+		Message:  a.summaryMessageLocked(),
+		Status:   status,
+	}
+}
+
+func (a *taskProgressAggregator) computeOverallLocked() int {
+	finishedCount := a.completed + a.failed
+	runningProgress := 0
+	for _, p := range a.inProgress {
+		runningProgress += clampProgress(p)
+	}
+
+	overall := (finishedCount*100 + runningProgress) / a.total
+	overall = clampProgress(overall)
+	if overall < a.lastOverall {
+		overall = a.lastOverall
+	}
+	a.lastOverall = overall
+	return overall
+}
+
+func (a *taskProgressAggregator) summaryMessageLocked() string {
+	return fmt.Sprintf(
+		"Batch progress: %d/%d completed, success=%d, failed=%d",
+		a.completed+a.failed,
+		a.total,
+		a.completed,
+		a.failed,
+	)
+}
+
+func clampProgress(value int) int {
+	if value < 0 {
+		return 0
+	}
+	if value > 100 {
+		return 100
+	}
+	return value
+}
+
 type TaskService struct {
 	repo     repository.TaskRepository
 	pool     *core.WorkerPool
@@ -103,6 +221,7 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 	if total <= 0 {
 		total = 1
 	}
+	progressAgg := newTaskProgressAggregator(total)
 
 	var wg sync.WaitGroup
 	for i := 0; i < total; i++ {
@@ -130,8 +249,9 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 			Execute: func(ctx context.Context, publish func(core.ProgressUpdate)) {
 				defer wg.Done()
 				publishWithLog := func(update core.ProgressUpdate) {
-					s.appendProgressLog(taskID, update)
-					publish(update)
+					aggregated := progressAgg.OnJobUpdate(uint(jobID), update)
+					s.appendProgressLog(taskID, aggregated)
+					publish(aggregated)
 				}
 				var exec executor.Executor
 				log.Printf("Job type: %s\n", taskType)
@@ -176,6 +296,10 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 						"completed": gorm.Expr("completed + ?", 1),
 					})
 				}
+
+				batchUpdate := progressAgg.OnJobDone(taskID, uint(jobID), err == nil)
+				s.appendProgressLog(taskID, batchUpdate)
+				publish(batchUpdate)
 			},
 		})
 	}

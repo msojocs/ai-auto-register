@@ -15,7 +15,7 @@ import {
   DatePicker,
   type TableProps,
 } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import StatusTag from '../components/StatusTag'
 import TaskProgress from '../components/TaskProgress'
@@ -49,6 +49,7 @@ export default function TaskList() {
   const [wizardValues, setWizardValues] = useState<WizardValues>({})
   const [submitting, setSubmitting] = useState(false)
   const [progressTaskId, setProgressTaskId] = useState<number | null>(null)
+  const [progressTaskStatus, setProgressTaskStatus] = useState<TaskBatch['status'] | null>(null)
   const [tempMailProviders, setTempMailProviders] = useState<TempMailProvider[]>([])
   const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([])
   const [form] = Form.useForm()
@@ -199,7 +200,13 @@ export default function TaskList() {
               {t('tasks.pause')}
             </Button>
           ) : null}
-          <Button size="small" onClick={() => setProgressTaskId(record.id)}>
+          <Button
+            size="small"
+            onClick={() => {
+              setProgressTaskId(record.id)
+              setProgressTaskStatus(record.status)
+            }}
+          >
             {t('tasks.progress')}
           </Button>
           <Popconfirm
@@ -229,9 +236,14 @@ export default function TaskList() {
         <Title level={4} style={{ margin: 0 }}>
           {t('tasks.title')}
         </Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openWizard}>
-          {t('tasks.createTask')}
-        </Button>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={fetchTasks} loading={loading}>
+            {t('tasks.refreshList')}
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openWizard}>
+            {t('tasks.createTask')}
+          </Button>
+        </Space>
       </div>
 
       <Table
@@ -329,8 +341,12 @@ export default function TaskList() {
       {/* Task Progress Modal */}
       <TaskProgress
         taskId={progressTaskId}
+        taskStatus={progressTaskStatus}
         open={progressTaskId != null}
-        onClose={() => setProgressTaskId(null)}
+        onClose={() => {
+          setProgressTaskId(null)
+          setProgressTaskStatus(null)
+        }}
       />
     </div>
   )
