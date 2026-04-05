@@ -27,10 +27,10 @@ func (h *ProxyHandler) List(c *gin.Context) {
 	}
 	proxies, total, err := h.svc.List(page, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"proxies": proxies, "total": total})
+	c.JSON(http.StatusOK, OK(gin.H{"proxies": proxies, "total": total}))
 }
 
 func (h *ProxyHandler) Create(c *gin.Context) {
@@ -43,21 +43,21 @@ func (h *ProxyHandler) Create(c *gin.Context) {
 		Protocol     string `json:"protocol"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	proxy, err := h.svc.Create(req.Host, req.Port, req.ProxyGroupID, req.Username, req.Password, req.Protocol)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"proxy": proxy})
+	c.JSON(http.StatusCreated, OK(gin.H{"proxy": proxy}))
 }
 
 func (h *ProxyHandler) Update(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return
 	}
 	var req struct {
@@ -69,40 +69,40 @@ func (h *ProxyHandler) Update(c *gin.Context) {
 		Protocol     string `json:"protocol"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	proxy, err := h.svc.Update(uint(id), req.Host, req.Port, req.ProxyGroupID, req.Username, req.Password, req.Protocol)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"proxy": proxy})
+	c.JSON(http.StatusOK, OK(gin.H{"proxy": proxy}))
 }
 
 func (h *ProxyHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return
 	}
 	if err := h.svc.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	c.JSON(http.StatusOK, OK(gin.H{"message": "deleted"}))
 }
 
 func (h *ProxyHandler) Test(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return
 	}
 	ok, err := h.svc.Test(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, Fail(404, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": ok})
+	c.JSON(http.StatusOK, OK(gin.H{"ok": ok}))
 }

@@ -141,14 +141,15 @@ func clampProgress(value int) int {
 }
 
 type TaskService struct {
-	repo     repository.TaskRepository
-	pool     *core.WorkerPool
-	db       *gorm.DB
-	proxyRes *resource.ProxyResource
+	repo       repository.TaskRepository
+	pool       *core.WorkerPool
+	db         *gorm.DB
+	proxyRes   *resource.ProxyResource
+	settingSvc *SettingService
 }
 
-func NewTaskService(repo repository.TaskRepository, pool *core.WorkerPool, db *gorm.DB, proxyRes *resource.ProxyResource) *TaskService {
-	return &TaskService{repo: repo, pool: pool, db: db, proxyRes: proxyRes}
+func NewTaskService(repo repository.TaskRepository, pool *core.WorkerPool, db *gorm.DB, proxyRes *resource.ProxyResource, settingSvc *SettingService) *TaskService {
+	return &TaskService{repo: repo, pool: pool, db: db, proxyRes: proxyRes, settingSvc: settingSvc}
 }
 
 func (s *TaskService) List(page, limit int) ([]model.TaskBatch, int64, error) {
@@ -257,7 +258,7 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 				log.Printf("Job type: %s\n", taskType)
 				switch taskType {
 				case "chatgpt":
-					exec = executor.NewChatGPTExecutor()
+					exec = executor.NewChatGPTExecutor(s.settingSvc.GetSentinelBaseURL())
 				case "cursor":
 					exec = executor.NewCursorExecutor()
 				default:

@@ -171,6 +171,17 @@ const en = {
    failedToDelete: 'Failed to delete proxy group',
   },
 
+  settings: {
+    runtimeTab: 'Runtime Settings',
+    sentinelBaseUrl: 'Sentinel Base URL',
+    sentinelBaseUrlPlaceholder: 'http://127.0.0.1:3000',
+    sentinelBaseUrlHelp: 'Used by ChatGPT registration flow to request NewSentinelToken.',
+    sentinelBaseUrlRequired: 'Please enter Sentinel Base URL',
+    failedToLoad: 'Failed to load system settings',
+    saved: 'System settings saved',
+    failedToSave: 'Failed to save system settings',
+  },
+
   // Push Templates
   pushTemplates: {
     title: 'Push Templates',

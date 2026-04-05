@@ -41,6 +41,7 @@ func SetupRouter(
 	dashboardH *handler.DashboardHandler,
 	pushTemplateH *handler.PushTemplateHandler,
 	tempMailProviderH *handler.TempMailProviderHandler,
+	settingH *handler.SettingHandler,
 	authSvc *service.AuthService,
 ) *gin.Engine {
 	r := gin.Default()
@@ -131,6 +132,12 @@ func SetupRouter(
 			tempMailProviders.PUT("/:id", tempMailProviderH.Update)
 			tempMailProviders.DELETE("/:id", tempMailProviderH.Delete)
 			tempMailProviders.POST("/:id/test", tempMailProviderH.Test)
+		}
+
+		settings := api.Group("/settings")
+		{
+			settings.GET("", settingH.Get)
+			settings.PUT("", settingH.Update)
 		}
 	}
 

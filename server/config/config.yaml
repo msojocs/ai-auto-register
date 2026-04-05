@@ -47,3 +47,8 @@ captcha:
   # API key for the captcha provider.
   # Env: CAPTCHA_API_KEY
   api_key: ""
+
+executor:
+  # Base URL of the local sentinel-token proxy server used by the ChatGPT executor.
+  # Env: SENTINEL_BASE_URL
+  sentinel_base_url: "http://127.0.0.1:3000"

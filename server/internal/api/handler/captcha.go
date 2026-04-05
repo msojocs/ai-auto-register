@@ -17,5 +17,5 @@ func NewCaptchaHandler(res *resource.CaptchaResource) *CaptchaHandler {
 
 func (h *CaptchaHandler) Stats(c *gin.Context) {
 	stats := h.res.GetStats()
-	c.JSON(http.StatusOK, gin.H{"stats": stats})
+	c.JSON(http.StatusOK, OK(gin.H{"stats": stats}))
 }

@@ -37,18 +37,23 @@ const (
 
 // ChatGPTExecutor registers new OpenAI / ChatGPT accounts using the HTTP protocol flow.
 type ChatGPTExecutor struct {
-	step string
+	sentinelBaseURL string
+	step            string
 }
 
-func NewChatGPTExecutor() *ChatGPTExecutor {
-	return &ChatGPTExecutor{}
+func NewChatGPTExecutor(sentinelBaseURL string) *ChatGPTExecutor {
+	if sentinelBaseURL == "" {
+		sentinelBaseURL = "http://127.0.0.1:3000"
+	}
+	return &ChatGPTExecutor{sentinelBaseURL: sentinelBaseURL}
 }
 
 // openAISession holds the HTTP clients and helpers for the auth0 sign-up flow.
 type openAISession struct {
-	noRedirect    *http.Client
-	withRedirect  *http.Client
-	sentinelToken *openai.SentinelToken
+	noRedirect      *http.Client
+	withRedirect    *http.Client
+	sentinelToken   *openai.SentinelToken
+	sentinelBaseURL string
 }
 type openAIPrepareResult struct {
 	OaiDid       string
@@ -64,7 +69,7 @@ type openAITokenResult struct {
 	Scope        string `json:"scope"`
 }
 
-func newOpenAISession(proxyURL string) (*openAISession, error) {
+func newOpenAISession(proxyURL, sentinelBaseURL string) (*openAISession, error) {
 	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	if err != nil {
 		return nil, err
@@ -90,7 +95,7 @@ func newOpenAISession(proxyURL string) (*openAISession, error) {
 		Transport: transport,
 		Timeout:   60 * time.Second,
 	}
-	return &openAISession{noRedirect: noRedir, withRedirect: withRedir}, nil
+	return &openAISession{noRedirect: noRedir, withRedirect: withRedir, sentinelBaseURL: sentinelBaseURL}, nil
 }
 
 func (s *openAISession) jsonPost(ctx context.Context, useRedir bool, targetURL string, payload interface{}, headers map[string]string) ([]byte, int, error) {
@@ -245,8 +250,7 @@ func (s *openAISession) prepareSession(ctx context.Context) (*openAIPrepareResul
 
 	// 2. sentinel token获取
 	{
-		// TODO: 地址配置化
-		s.sentinelToken = openai.NewSentinelToken("http://127.0.0.1:3000", "authorize_continue", result.OaiDid)
+		s.sentinelToken = openai.NewSentinelToken(s.sentinelBaseURL, "authorize_continue", result.OaiDid)
 		_, err = s.sentinelToken.Req(s.noRedirect)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get sentinel token: %w", err)
@@ -331,7 +335,7 @@ func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, pre
 func (s *openAISession) setPassword(ctx context.Context, email, password string, prepareResult *openAIPrepareResult) (string, error) {
 	reqURL := fmt.Sprintf("%s/api/accounts/user/register", openAIAuthBase)
 
-	s.sentinelToken = openai.NewSentinelToken("http://127.0.0.1:3000", "username_password_create", prepareResult.OaiDid)
+	s.sentinelToken = openai.NewSentinelToken(s.sentinelBaseURL, "username_password_create", prepareResult.OaiDid)
 	s.sentinelToken.Req(s.noRedirect)
 	jsonData := map[string]string{
 		"username": email,
@@ -502,7 +506,7 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 		return err
 	}
 
-	s.sentinelToken = openai.NewSentinelToken("http://127.0.0.1:3000", "oauth_create_account", prepareResult.OaiDid)
+	s.sentinelToken = openai.NewSentinelToken(s.sentinelBaseURL, "oauth_create_account", prepareResult.OaiDid)
 	s.sentinelToken.Req(s.noRedirect)
 	{
 		headers, err := s.sentinelToken.GetSentinelHeader()
@@ -724,7 +728,7 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 	}
 
 	// ── OpenAI HTTP session ───────────────────────────────────────────────────
-	sess, err := newOpenAISession(proxyURL)
+	sess, err := newOpenAISession(proxyURL, e.sentinelBaseURL)
 	if err != nil {
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Failed to init HTTP session: %v", err), "failed")
 		return nil, err

@@ -26,7 +26,7 @@ func NewPushTemplateHandler(svc *service.PushTemplateService) *PushTemplateHandl
 func parsePushTemplateID(c *gin.Context) (uint, bool) {
 	raw, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || raw > math.MaxUint32 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return 0, false
 	}
 	return uint(raw), true
@@ -43,24 +43,24 @@ func (h *PushTemplateHandler) List(c *gin.Context) {
 	}
 	templates, total, err := h.svc.List(page, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"push_templates": templates, "total": total})
+	c.JSON(http.StatusOK, OK(gin.H{"push_templates": templates, "total": total}))
 }
 
 func (h *PushTemplateHandler) Create(c *gin.Context) {
 	var req service.CreatePushTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	t, err := h.svc.Create(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"push_template": t})
+	c.JSON(http.StatusCreated, OK(gin.H{"push_template": t}))
 }
 
 func (h *PushTemplateHandler) Update(c *gin.Context) {
@@ -70,15 +70,15 @@ func (h *PushTemplateHandler) Update(c *gin.Context) {
 	}
 	var req service.UpdatePushTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	t, err := h.svc.Update(id, req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"push_template": t})
+	c.JSON(http.StatusOK, OK(gin.H{"push_template": t}))
 }
 
 func (h *PushTemplateHandler) Delete(c *gin.Context) {
@@ -87,10 +87,10 @@ func (h *PushTemplateHandler) Delete(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Delete(id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	c.JSON(http.StatusOK, OK(gin.H{"message": "deleted"}))
 }
 
 func (h *PushTemplateHandler) Copy(c *gin.Context) {
@@ -100,20 +100,20 @@ func (h *PushTemplateHandler) Copy(c *gin.Context) {
 	}
 	t, err := h.svc.CopyTemplate(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"push_template": t})
+	c.JSON(http.StatusCreated, OK(gin.H{"push_template": t}))
 }
 
 func (h *PushTemplateHandler) ListForUpload(c *gin.Context) {
 	accountType := c.Query("type")
 	templates, err := h.svc.ListEnabledForType(accountType)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"push_templates": templates})
+	c.JSON(http.StatusOK, OK(gin.H{"push_templates": templates}))
 }
 
 func (h *PushTemplateHandler) PushAccountByID(c *gin.Context) {
@@ -125,19 +125,19 @@ func (h *PushTemplateHandler) PushAccountByID(c *gin.Context) {
 		AccountID uint `json:"account_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	statusCode, response, err := h.svc.PushAccountByID(req.AccountID, id)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"ok": false, "status_code": 0, "response": err.Error()})
+		c.JSON(http.StatusOK, OK(gin.H{"ok": false, "status_code": 0, "response": err.Error()}))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, OK(gin.H{
 		"ok":          statusCode < 400,
 		"status_code": statusCode,
 		"response":    response,
-	})
+	}))
 }
 
 func (h *PushTemplateHandler) TestPush(c *gin.Context) {
@@ -148,7 +148,7 @@ func (h *PushTemplateHandler) TestPush(c *gin.Context) {
 
 	tmpl, err := h.svc.GetTemplate(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, Fail(404, err.Error()))
 		return
 	}
 
@@ -164,7 +164,7 @@ func (h *PushTemplateHandler) TestPush(c *gin.Context) {
 
 	rendered, err := renderBodyTemplate(tmpl.BodyTemplate, fakeData)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"ok": false, "status_code": 0, "response": "template render error: " + err.Error()})
+		c.JSON(http.StatusOK, OK(gin.H{"ok": false, "status_code": 0, "response": "template render error: " + err.Error()}))
 		return
 	}
 
@@ -176,7 +176,7 @@ func (h *PushTemplateHandler) TestPush(c *gin.Context) {
 
 	httpReq, err := http.NewRequest(method, tmpl.URL, reqBody)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"ok": false, "status_code": 0, "response": "request build error: " + err.Error()})
+		c.JSON(http.StatusOK, OK(gin.H{"ok": false, "status_code": 0, "response": "request build error: " + err.Error()}))
 		return
 	}
 
@@ -192,18 +192,18 @@ func (h *PushTemplateHandler) TestPush(c *gin.Context) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"ok": false, "status_code": 0, "response": err.Error()})
+		c.JSON(http.StatusOK, OK(gin.H{"ok": false, "status_code": 0, "response": err.Error()}))
 		return
 	}
 	defer resp.Body.Close()
 	respBytes, _ := io.ReadAll(resp.Body)
 
 	success := resp.StatusCode < 400
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, OK(gin.H{
 		"ok":          success,
 		"status_code": resp.StatusCode,
 		"response":    string(respBytes),
-	})
+	}))
 }
 
 func renderBodyTemplate(bodyTmpl string, data map[string]interface{}) (string, error) {

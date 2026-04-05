@@ -30,11 +30,11 @@ func (h *DashboardHandler) Stats(c *gin.Context) {
 	var tempMailProviders int64
 	h.db.Model(&model.TempMailProvider{}).Where("enabled = ?", true).Count(&tempMailProviders)
 
-	c.JSON(http.StatusOK, gin.H{
-		"total_accounts":     totalAccounts,
-		"active_accounts":    activeAccounts,
-		"total_tasks":        totalTasks,
-		"proxies_available":  proxiesAvailable,
+	c.JSON(http.StatusOK, OK(gin.H{
+		"total_accounts":      totalAccounts,
+		"active_accounts":     activeAccounts,
+		"total_tasks":         totalTasks,
+		"proxies_available":   proxiesAvailable,
 		"temp_mail_providers": tempMailProviders,
-	})
+	}))
 }

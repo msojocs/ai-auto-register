@@ -32,10 +32,10 @@ func NewTempMailProviderHandler(svc *service.TempMailProviderService) *TempMailP
 func (h *TempMailProviderHandler) List(c *gin.Context) {
 	providers, err := h.svc.List()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"providers": providers, "total": len(providers)})
+	c.JSON(http.StatusOK, OK(gin.H{"providers": providers, "total": len(providers)}))
 }
 
 // Create adds a new temp mail provider configuration.
@@ -48,7 +48,7 @@ func (h *TempMailProviderHandler) Create(c *gin.Context) {
 		Description  string                 `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	if req.Config == nil {
@@ -56,17 +56,17 @@ func (h *TempMailProviderHandler) Create(c *gin.Context) {
 	}
 	p, err := h.svc.Create(req.Name, req.ProviderType, req.Description, req.Config, req.Enabled)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"provider": p})
+	c.JSON(http.StatusCreated, OK(gin.H{"provider": p}))
 }
 
 // Update modifies an existing temp mail provider configuration.
 func (h *TempMailProviderHandler) Update(c *gin.Context) {
 	id, ok := parseTempMailID(c.Param("id"))
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return
 	}
 	var req struct {
@@ -77,42 +77,42 @@ func (h *TempMailProviderHandler) Update(c *gin.Context) {
 		Description  string                 `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	p, err := h.svc.Update(id, req.Name, req.ProviderType, req.Description, req.Config, req.Enabled)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"provider": p})
+	c.JSON(http.StatusOK, OK(gin.H{"provider": p}))
 }
 
 // Delete removes a temp mail provider configuration.
 func (h *TempMailProviderHandler) Delete(c *gin.Context) {
 	id, ok := parseTempMailID(c.Param("id"))
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return
 	}
 	if err := h.svc.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	c.JSON(http.StatusOK, OK(gin.H{"message": "deleted"}))
 }
 
 // Test validates the provider configuration by attempting to obtain a temporary email address.
 func (h *TempMailProviderHandler) Test(c *gin.Context) {
 	id, ok := parseTempMailID(c.Param("id"))
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return
 	}
 	email, err := h.svc.TestProvider(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": err.Error()})
+		c.JSON(http.StatusBadRequest, OK(gin.H{"ok": false, "error": err.Error()}))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "email": email})
+	c.JSON(http.StatusOK, OK(gin.H{"ok": true, "email": email}))
 }

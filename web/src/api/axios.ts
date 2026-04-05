@@ -15,13 +15,26 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Blob responses (file downloads) are not JSON-wrapped — skip unwrapping.
+    if (res.config.responseType === 'blob') return res
+    const body = res.data as { code: number; msg: string; data: unknown }
+    if (body && typeof body === 'object' && 'code' in body) {
+      if (body.code !== 0) {
+        return Promise.reject(new Error(body.msg || 'Request failed'))
+      }
+      res.data = body.data
+    }
+    return res
+  },
   (err) => {
     if (err.response?.status === 401) {
       useAuthStore.getState().logout()
       window.location.href = '/login'
     }
-    return Promise.reject(err)
+    const msg =
+      err.response?.data?.msg || err.response?.data?.error || err.message
+    return Promise.reject(new Error(msg))
   },
 )
 

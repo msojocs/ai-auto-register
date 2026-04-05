@@ -19,10 +19,10 @@ func NewProxyGroupHandler(svc *service.ProxyGroupService) *ProxyGroupHandler {
 func (h *ProxyGroupHandler) List(c *gin.Context) {
 	groups, err := h.svc.List()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"groups": groups, "total": len(groups)})
+	c.JSON(http.StatusOK, OK(gin.H{"groups": groups, "total": len(groups)}))
 }
 
 func (h *ProxyGroupHandler) Create(c *gin.Context) {
@@ -30,47 +30,47 @@ func (h *ProxyGroupHandler) Create(c *gin.Context) {
 		Name string `json:"name" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	group, err := h.svc.Create(req.Name)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"group": group})
+	c.JSON(http.StatusCreated, OK(gin.H{"group": group}))
 }
 
 func (h *ProxyGroupHandler) Update(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return
 	}
 	var req struct {
 		Name string `json:"name" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
 	group, err := h.svc.Update(uint(id), req.Name)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"group": group})
+	c.JSON(http.StatusOK, OK(gin.H{"group": group}))
 }
 
 func (h *ProxyGroupHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
 		return
 	}
 	if err := h.svc.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	c.JSON(http.StatusOK, OK(gin.H{"message": "deleted"}))
 }

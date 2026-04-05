@@ -11,7 +11,7 @@ import (
 func main() {
 
 	for i := 0; i < 1000; i++ {
-		gpt := executor.NewChatGPTExecutor()
+		gpt := executor.NewChatGPTExecutor("")
 		ctx := context.Background()
 		cfg := map[string]interface{}{
 			"proxy": "http://127.0.0.1:8866",

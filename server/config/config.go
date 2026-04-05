@@ -14,6 +14,15 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Auth     AuthConfig     `yaml:"auth"`
 	Captcha  CaptchaConfig  `yaml:"captcha"`
+	Executor ExecutorConfig `yaml:"executor"`
+}
+
+// ExecutorConfig holds settings for job executors.
+type ExecutorConfig struct {
+	// SentinelBaseURL is the base URL of the local sentinel-token proxy server
+	// used by the ChatGPT executor to obtain proof-of-work tokens.
+	// Env: SENTINEL_BASE_URL
+	SentinelBaseURL string `yaml:"sentinel_base_url"`
 }
 
 // ServerConfig controls the HTTP listener.
@@ -156,6 +165,9 @@ func defaults() *Config {
 		Captcha: CaptchaConfig{
 			Provider: "2captcha",
 		},
+		Executor: ExecutorConfig{
+			SentinelBaseURL: "http://127.0.0.1:3000",
+		},
 	}
 }
 
@@ -208,5 +220,8 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("CAPTCHA_API_KEY"); v != "" {
 		cfg.Captcha.APIKey = v
+	}
+	if v := os.Getenv("SENTINEL_BASE_URL"); v != "" {
+		cfg.Executor.SentinelBaseURL = v
 	}
 }

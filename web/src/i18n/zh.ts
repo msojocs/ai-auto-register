@@ -171,6 +171,17 @@ const zh = {
    failedToDelete: '删除代理分组失败',
   },
 
+  settings: {
+    runtimeTab: '运行配置',
+    sentinelBaseUrl: 'Sentinel 服务地址',
+    sentinelBaseUrlPlaceholder: 'http://127.0.0.1:3000',
+    sentinelBaseUrlHelp: '用于 ChatGPT 注册流程调用 NewSentinelToken。',
+    sentinelBaseUrlRequired: '请输入 Sentinel 服务地址',
+    failedToLoad: '加载系统设置失败',
+    saved: '系统设置已保存',
+    failedToSave: '保存系统设置失败',
+  },
+
   // Push Templates
   pushTemplates: {
     title: '推送模板',

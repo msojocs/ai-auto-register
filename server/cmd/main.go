@@ -49,6 +49,7 @@ func main() {
 	proxyRepo := repository.NewProxyRepository(model.DB)
 	proxyGroupRepo := repository.NewProxyGroupRepository(model.DB)
 	pushTemplateRepo := repository.NewPushTemplateRepository(model.DB)
+	settingRepo := repository.NewSettingRepository(model.DB)
 
 	// Service layer (uses repositories)
 	authSvc := service.NewAuthService(userRepo, cfg.Auth.JWTSecret)
@@ -60,7 +61,8 @@ func main() {
 		log.Printf("Created default admin account: %s", defaultAdmin.Username)
 		log.Println("WARNING: change the default admin password immediately after first login.")
 	}
-	taskSvc := service.NewTaskService(taskRepo, pool, model.DB, proxyRes)
+	settingSvc := service.NewSettingService(settingRepo, cfg.Executor.SentinelBaseURL)
+	taskSvc := service.NewTaskService(taskRepo, pool, model.DB, proxyRes, settingSvc)
 	accountSvc := service.NewAccountService(accountRepo)
 	proxySvc := service.NewProxyService(proxyRepo, proxyGroupRepo, proxyRes)
 	proxyGroupSvc := service.NewProxyGroupService(proxyGroupRepo, proxyRepo)
@@ -80,8 +82,9 @@ func main() {
 	dashboardH := handler.NewDashboardHandler(model.DB)
 	pushTemplateH := handler.NewPushTemplateHandler(pushTemplateSvc)
 	tempMailProviderH := handler.NewTempMailProviderHandler(tempMailProviderSvc)
+	settingH := handler.NewSettingHandler(settingSvc)
 
-	r := api.SetupRouter(authH, taskH, accountH, proxyH, proxyGroupH, captchaH, dashboardH, pushTemplateH, tempMailProviderH, authSvc)
+	r := api.SetupRouter(authH, taskH, accountH, proxyH, proxyGroupH, captchaH, dashboardH, pushTemplateH, tempMailProviderH, settingH, authSvc)
 
 	log.Printf("Server starting on :%s", cfg.Server.Port)
 	if err := r.Run(":" + cfg.Server.Port); err != nil {
