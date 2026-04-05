@@ -117,10 +117,10 @@ func (s *openAISession) jsonPost(ctx context.Context, useRedir bool, targetURL s
 	return data, resp.StatusCode, err
 }
 
-func (s *openAISession) checkIpLocation(ctx context.Context) error {
+func (s *openAISession) checkIpLocation(ctx context.Context) (string, error) {
 	resp, err := s.withRedirect.Get("https://cloudflare.com/cdn-cgi/trace")
 	if err != nil {
-		return fmt.Errorf("IP location check failed: %w", err)
+		return "", fmt.Errorf("IP location check failed: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
@@ -140,9 +140,9 @@ func (s *openAISession) checkIpLocation(ctx context.Context) error {
 		"TW": true,
 	}
 	if blockedRegions[loc] {
-		return fmt.Errorf("IP geolocation check: access from region %s may be blocked by OpenAI", loc)
+		return loc, fmt.Errorf("IP geolocation check: access from region %s may be blocked by OpenAI", loc)
 	}
-	return nil
+	return loc, nil
 }
 
 func (s *openAISession) generateCodeVerifier() (string, error) {
@@ -683,6 +683,12 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 
 	proxyURL := cfgStr(config, "proxy", "")
 
+	if proxyURL != "" {
+		sendProgress(publish, taskID, 4, fmt.Sprintf("Using proxy: %s", proxyURL), "running")
+	} else {
+		sendProgress(publish, taskID, 4, "No proxy configured; using direct connection", "running")
+	}
+
 	// ── OpenAI HTTP session ───────────────────────────────────────────────────
 	sess, err := newOpenAISession(proxyURL)
 	if err != nil {
@@ -692,11 +698,12 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 
 	// Check location of the IP address, as OpenAI may block certain regions.
 	sendProgress(publish, taskID, 8, "Checking IP geolocation…", "running")
-	err = sess.checkIpLocation(ctx)
+	loc, err := sess.checkIpLocation(ctx)
 	if err != nil {
 		sendProgress(publish, taskID, 100, fmt.Sprintf("IP location check failed: %v", err), "failed")
 		return nil, err
 	}
+	sendProgress(publish, taskID, 10, fmt.Sprintf("IP geolocation: %s", loc), "running")
 
 	// ── Temp email ────────────────────────────────────────────────────────────
 	mailProviderType := cfgStr(config, "mail_provider", "tempmail")
@@ -734,11 +741,11 @@ executor_loop:
 	for {
 		switch e.step {
 		case "prepare_session":
-			// Step 1 – seed session / get state
-			sendProgress(publish, taskID, 30, "Step 1/5: Seeding registration session…", "running")
+			// Seed session / get state
+			sendProgress(publish, taskID, 30, "Seeding registration session…", "running")
 			prepareResult, err := sess.prepareSession(ctx)
 			if err != nil {
-				sendProgress(publish, taskID, 100, fmt.Sprintf("Step 1 failed: %v", err), "failed")
+				sendProgress(publish, taskID, 100, fmt.Sprintf("Failed: %v", err), "failed")
 				return nil, err
 			}
 			if prepareResult.OaiDid == "" {
@@ -761,19 +768,19 @@ executor_loop:
 				e.step = "wait_for_otp"
 			}
 		case "set_password":
-			// Step 3 – set password
+			// Set password
 			password := randPassword()
-			sendProgress(publish, taskID, 50, "Step 3/5: Setting password…", "running")
+			sendProgress(publish, taskID, 50, "Setting password…", "running")
 			passResult, err := sess.setPassword(ctx, email, password, stepContext.prepareResult)
 			if err != nil {
-				sendProgress(publish, taskID, 100, fmt.Sprintf("Step 3 failed: %v", err), "failed")
+				sendProgress(publish, taskID, 100, fmt.Sprintf("Failed to set password: %v", err), "failed")
 				return nil, err
 			}
 			stepContext.passResult = passResult
 			e.step = "send_otp"
 		case "send_otp":
-			// Step 4a – trigger OTP email
-			sendProgress(publish, taskID, 55, "Step 4/5: Triggering OTP email…", "running")
+			// Trigger OTP email
+			sendProgress(publish, taskID, 55, "Triggering OTP email…", "running")
 			// The OTP email should be triggered by the previous step; if not, we can try to resend or just wait for it.
 			err := sess.sendOtp(ctx, stepContext.prepareResult)
 			if err != nil {
@@ -792,7 +799,7 @@ executor_loop:
 			sendProgress(publish, taskID, 55+stepContext.resendCount*5, fmt.Sprintf("Resent OTP email (%d)…", stepContext.resendCount), "running")
 			e.step = "wait_for_otp"
 		case "wait_for_otp":
-			// Step 4 – wait for OTP and verify
+			// Wait for OTP and verify
 			sendProgress(publish, taskID, 58, "Waiting for email verification code…", "running")
 			otp, err := mp.WaitForCode(ctx, mailAccount, "openai", 30)
 			if err != nil {
@@ -805,7 +812,7 @@ executor_loop:
 			}
 			sendProgress(publish, taskID, 70, fmt.Sprintf("Got OTP: %s – verifying…", otp), "running")
 			if err := sess.verifyEmailOTP(ctx, email, otp, stepContext.prepareResult); err != nil {
-				sendProgress(publish, taskID, 100, fmt.Sprintf("Step 4 failed: %v", err), "failed")
+				sendProgress(publish, taskID, 100, fmt.Sprintf("Failed to verify OTP: %v", err), "failed")
 				return nil, err
 			}
 			e.step = "create_account"
@@ -818,8 +825,8 @@ executor_loop:
 			sendProgress(publish, taskID, 80, "Account created successfully!", "running")
 			e.step = "get_callback_url"
 		case "get_callback_url":
-			// Step 5 – obtain session/access token
-			sendProgress(publish, taskID, 85, "Step 5/5: Obtaining session token…", "running")
+			// Obtain session/access token
+			sendProgress(publish, taskID, 85, "Obtaining session token…", "running")
 			callbackUrl, tokenErr := sess.getCallbackUrl(ctx)
 			// token errors are non-fatal – the account is still usable with email+password.
 			if tokenErr != nil {
