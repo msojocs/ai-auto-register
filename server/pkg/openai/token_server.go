@@ -24,19 +24,27 @@ type SentinelInfo struct {
 	} `json:"proofofwork"`
 }
 
+const defaultSentinelReqURL = "https://sentinel.openai.com/backend-api/sentinel/req"
+
 type SentinelToken struct {
-	baseUrl      string
-	flowName     string
-	did          string
-	proof        string
-	sentinelInfo *SentinelInfo
+	baseUrl        string
+	flowName       string
+	did            string
+	proof          string
+	sentinelInfo   *SentinelInfo
+	sentinelReqURL string
 }
 
-func NewSentinelToken(url, flowName, did string) *SentinelToken {
+// NewSentinelToken creates a SentinelToken. Pass reqURL="" to use the default sentinel endpoint.
+func NewSentinelToken(url, flowName, did, reqURL string) *SentinelToken {
+	if reqURL == "" {
+		reqURL = defaultSentinelReqURL
+	}
 	return &SentinelToken{
-		baseUrl:  url,
-		flowName: flowName,
-		did:      did,
+		baseUrl:        url,
+		flowName:       flowName,
+		did:            did,
+		sentinelReqURL: reqURL,
 	}
 }
 
@@ -66,7 +74,7 @@ func (s *SentinelToken) Req(client *http.Client) (*SentinelInfo, error) {
 
 	// 2. 请求OpenAI
 	{
-		reqURL := "https://sentinel.openai.com/backend-api/sentinel/req"
+		reqURL := s.sentinelReqURL
 		payload := map[string]string{
 			"p":    proof,
 			"id":   s.did,

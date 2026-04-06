@@ -30,7 +30,9 @@ import (
 // This implementation performs the HTTP protocol flow; additional bot-bypass
 // tooling (TLS fingerprinting, CAPTCHA solver) may be required in production.
 const (
-	openAIAuthBase = "https://auth.openai.com"
+	openAIAuthBase        = "https://auth.openai.com"
+	defaultCloudflareURL  = "https://cloudflare.com/cdn-cgi/trace"
+	defaultSentinelReqURL = "https://sentinel.openai.com/backend-api/sentinel/req"
 
 	chatGPTUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 )
@@ -39,21 +41,32 @@ const (
 type ChatGPTExecutor struct {
 	sentinelBaseURL string
 	step            string
+	authBaseURL     string
+	cloudflareURL   string
+	sentinelReqURL  string
 }
 
 func NewChatGPTExecutor(sentinelBaseURL string) *ChatGPTExecutor {
 	if sentinelBaseURL == "" {
 		sentinelBaseURL = "http://127.0.0.1:3000"
 	}
-	return &ChatGPTExecutor{sentinelBaseURL: sentinelBaseURL}
+	return &ChatGPTExecutor{
+		sentinelBaseURL: sentinelBaseURL,
+		authBaseURL:     openAIAuthBase,
+		cloudflareURL:   defaultCloudflareURL,
+		sentinelReqURL:  defaultSentinelReqURL,
+	}
 }
 
 // openAISession holds the HTTP clients and helpers for the auth0 sign-up flow.
 type openAISession struct {
-	noRedirect      *http.Client
-	withRedirect    *http.Client
-	sentinelToken   *openai.SentinelToken
-	sentinelBaseURL string
+	noRedirect            *http.Client
+	withRedirect          *http.Client
+	sentinelToken         *openai.SentinelToken
+	sentinelServerBaseURL string
+	authBaseURL           string
+	cloudflareURL         string
+	sentinelReqURL        string
 }
 type openAIPrepareResult struct {
 	OaiDid       string
@@ -69,7 +82,7 @@ type openAITokenResult struct {
 	Scope        string `json:"scope"`
 }
 
-func newOpenAISession(proxyURL, sentinelBaseURL string) (*openAISession, error) {
+func newOpenAISession(proxyURL, sentinelBaseURL, authBaseURL, cloudflareURL, sentinelReqURL string) (*openAISession, error) {
 	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	if err != nil {
 		return nil, err
@@ -95,7 +108,11 @@ func newOpenAISession(proxyURL, sentinelBaseURL string) (*openAISession, error) 
 		Transport: transport,
 		Timeout:   60 * time.Second,
 	}
-	return &openAISession{noRedirect: noRedir, withRedirect: withRedir, sentinelBaseURL: sentinelBaseURL}, nil
+	return &openAISession{noRedirect: noRedir, withRedirect: withRedir, sentinelServerBaseURL: sentinelBaseURL, authBaseURL: authBaseURL, cloudflareURL: cloudflareURL, sentinelReqURL: sentinelReqURL}, nil
+}
+
+func (s *openAISession) newSentinelToken(flowName, did string) *openai.SentinelToken {
+	return openai.NewSentinelToken(s.sentinelServerBaseURL, flowName, did, s.sentinelReqURL)
 }
 
 func (s *openAISession) jsonPost(ctx context.Context, useRedir bool, targetURL string, payload interface{}, headers map[string]string) ([]byte, int, error) {
@@ -124,7 +141,7 @@ func (s *openAISession) jsonPost(ctx context.Context, useRedir bool, targetURL s
 }
 
 func (s *openAISession) checkIpLocation(ctx context.Context) (string, error) {
-	resp, err := s.withRedirect.Get("https://cloudflare.com/cdn-cgi/trace")
+	resp, err := s.withRedirect.Get(s.cloudflareURL)
 	if err != nil {
 		return "", fmt.Errorf("IP location check failed: %w", err)
 	}
@@ -219,7 +236,7 @@ func (s *openAISession) prepareSession(ctx context.Context) (*openAIPrepareResul
 
 	// 1. 浏览器跳转authorize
 	{
-		reqURL := fmt.Sprintf("%s/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%%3A%%2F%%2Flocalhost%%3A1455%%2Fauth%%2Fcallback&scope=openid%%20profile%%20email%%20offline_access%%20api.connectors.read%%20api.connectors.invoke&code_challenge=%s&code_challenge_method=S256&id_token_add_organizations=true&codex_cli_simplified_flow=true&state=KWXvVMO9vEH6BDLTcgQAjmSVeczW5h4FzI0FdEpUHEs&originator=Codex%%20Desktop", openAIAuthBase, codeChallenge)
+		reqURL := fmt.Sprintf("%s/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%%3A%%2F%%2Flocalhost%%3A1455%%2Fauth%%2Fcallback&scope=openid%%20profile%%20email%%20offline_access%%20api.connectors.read%%20api.connectors.invoke&code_challenge=%s&code_challenge_method=S256&id_token_add_organizations=true&codex_cli_simplified_flow=true&state=KWXvVMO9vEH6BDLTcgQAjmSVeczW5h4FzI0FdEpUHEs&originator=Codex%%20Desktop", s.authBaseURL, codeChallenge)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 		if err != nil {
 			return nil, err
@@ -250,7 +267,7 @@ func (s *openAISession) prepareSession(ctx context.Context) (*openAIPrepareResul
 
 	// 2. sentinel token获取
 	{
-		s.sentinelToken = openai.NewSentinelToken(s.sentinelBaseURL, "authorize_continue", result.OaiDid)
+		s.sentinelToken = s.newSentinelToken("authorize_continue", result.OaiDid)
 		_, err = s.sentinelToken.Req(s.noRedirect)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get sentinel token: %w", err)
@@ -261,7 +278,7 @@ func (s *openAISession) prepareSession(ctx context.Context) (*openAIPrepareResul
 
 // isEmailNeedSignUp submits the email to the auth0 signup endpoint.
 func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, prepareResult *openAIPrepareResult) (bool, error) {
-	reqURL := fmt.Sprintf("%s/api/accounts/authorize/continue", openAIAuthBase)
+	reqURL := fmt.Sprintf("%s/api/accounts/authorize/continue", s.authBaseURL)
 
 	josnBody := map[string]interface{}{
 		"username": map[string]string{
@@ -333,9 +350,9 @@ func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, pre
 
 // setPassword submits the password to the auth0 signup continuation endpoint.
 func (s *openAISession) setPassword(ctx context.Context, email, password string, prepareResult *openAIPrepareResult) (string, error) {
-	reqURL := fmt.Sprintf("%s/api/accounts/user/register", openAIAuthBase)
+	reqURL := fmt.Sprintf("%s/api/accounts/user/register", s.authBaseURL)
 
-	s.sentinelToken = openai.NewSentinelToken(s.sentinelBaseURL, "username_password_create", prepareResult.OaiDid)
+	s.sentinelToken = s.newSentinelToken("username_password_create", prepareResult.OaiDid)
 	s.sentinelToken.Req(s.noRedirect)
 	jsonData := map[string]string{
 		"username": email,
@@ -398,7 +415,7 @@ func (s *openAISession) setPassword(ctx context.Context, email, password string,
 }
 
 func (s *openAISession) sendOtp(ctx context.Context, prepareResult *openAIPrepareResult) error {
-	reqUrl := fmt.Sprintf("%s/api/accounts/email-otp/send", openAIAuthBase)
+	reqUrl := fmt.Sprintf("%s/api/accounts/email-otp/send", s.authBaseURL)
 	// GET
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqUrl, nil)
 	if err != nil {
@@ -420,7 +437,7 @@ func (s *openAISession) sendOtp(ctx context.Context, prepareResult *openAIPrepar
 }
 
 func (s *openAISession) resendOtp(ctx context.Context) error {
-	reqUrl := fmt.Sprintf("%s/api/accounts/email-otp/resend", openAIAuthBase)
+	reqUrl := fmt.Sprintf("%s/api/accounts/email-otp/resend", s.authBaseURL)
 	// GET
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqUrl, nil)
 	if err != nil {
@@ -452,7 +469,7 @@ func (s *openAISession) resendOtp(ctx context.Context) error {
 
 // verifyEmailOTP submits the email verification OTP.
 func (s *openAISession) verifyEmailOTP(ctx context.Context, email, otp string, prepareResult *openAIPrepareResult) error {
-	reqURL := fmt.Sprintf("%s/api/accounts/email-otp/validate", openAIAuthBase)
+	reqURL := fmt.Sprintf("%s/api/accounts/email-otp/validate", s.authBaseURL)
 
 	jsonData := map[string]string{
 		"code": otp,
@@ -493,7 +510,7 @@ func (s *openAISession) verifyEmailOTP(ctx context.Context, email, otp string, p
 }
 
 func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAIPrepareResult) (string, error) {
-	reqUrl := fmt.Sprintf("%s/api/accounts/create_account", openAIAuthBase)
+	reqUrl := fmt.Sprintf("%s/api/accounts/create_account", s.authBaseURL)
 	jsonData := map[string]string{
 		"name":      "micro jans",
 		"birthdate": "1995-04-04",
@@ -507,7 +524,7 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 		return "", err
 	}
 
-	s.sentinelToken = openai.NewSentinelToken(s.sentinelBaseURL, "oauth_create_account", prepareResult.OaiDid)
+	s.sentinelToken = s.newSentinelToken("oauth_create_account", prepareResult.OaiDid)
 	s.sentinelToken.Req(s.noRedirect)
 	{
 		headers, err := s.sentinelToken.GetSentinelHeader()
@@ -553,7 +570,7 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 
 // getCallbackUrl completes the OAuth callback and extracts the session token.
 func (s *openAISession) getCallbackUrl(ctx context.Context) (string, error) {
-	reqUrl := fmt.Sprintf("%s/sign-in-with-chatgpt/codex/consent", openAIAuthBase)
+	reqUrl := fmt.Sprintf("%s/sign-in-with-chatgpt/codex/consent", s.authBaseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqUrl, nil)
 	if err != nil {
 		return "", err
@@ -583,7 +600,7 @@ func (s *openAISession) getCallbackUrl(ctx context.Context) (string, error) {
 	var continueUrl string
 	{
 		// https://auth.openai.com/api/accounts/workspace/select
-		selectURL := fmt.Sprintf("%s/api/accounts/workspace/select", openAIAuthBase)
+		selectURL := fmt.Sprintf("%s/api/accounts/workspace/select", s.authBaseURL)
 		jsonData := map[string]string{
 			"workspace_id": workspaceId,
 		}
@@ -665,7 +682,7 @@ func (s *openAISession) getTokenInfo(ctx context.Context, callbackUrl string, pr
 		return nil, fmt.Errorf("chatgpt getAccountInfo: code or state not found in callback URL: %s", callbackUrl)
 	}
 
-	reqURL := fmt.Sprintf("%s/oauth/token", openAIAuthBase)
+	reqURL := fmt.Sprintf("%s/oauth/token", s.authBaseURL)
 	formData := url.Values{
 		"grant_type":    {"authorization_code"},
 		"client_id":     {"app_EMoamEEZ73f0CkXaXp7hrann"},
@@ -725,7 +742,7 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 	}
 
 	// ── OpenAI HTTP session ───────────────────────────────────────────────────
-	sess, err := newOpenAISession(proxyURL, e.sentinelBaseURL)
+	sess, err := newOpenAISession(proxyURL, e.sentinelBaseURL, e.authBaseURL, e.cloudflareURL, e.sentinelReqURL)
 	if err != nil {
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Failed to init HTTP session: %v", err), "failed")
 		return nil, err

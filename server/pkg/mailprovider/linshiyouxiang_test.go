@@ -2,28 +2,50 @@ package mailprovider
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 )
 
 func TestLinshiyouxiangReceive(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/":
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte(
+				"var tempMailGlobal = 'mock@deepmails.org';\n" +
+					"var mailCodeGlobal = 'mocktoken123';",
+			))
+		case r.Method == http.MethodPost && r.URL.Path == "/get-messages":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"emails":[{"Code":"msg001","subject":"Your code is 123456","FromEmail":"noreply@example.com","SendTime":1775451744,"Status":1}]}`))
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/mail/view/"):
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte("emailContent = '<p>code: 123456</p>'\niframe.srcdoc = emailContent"))
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
 	provider := NewLinshiyouxiang(map[string]string{
-		"api_url": "https://deepmails.org",
+		"api_url": ts.URL,
 	})
+
 	ctx := context.Background()
 	email, err := provider.GetEmail(ctx)
 	if err != nil {
 		t.Fatalf("GetEmail: %v", err)
 	}
-	t.Logf("Created email: %s", email)
-	t.Logf("去 https://anonymousemail.me/ 发邮件给：%s", email.Email)
-	t.Logf("内容：code: 123456")
+	t.Logf("Created email: %s", email.Email)
 
-	code, err := provider.WaitForCode(ctx, email, "code", 600)
+	code, err := provider.WaitForCode(ctx, email, "code", 10)
 	if err != nil {
 		t.Fatalf("WaitForCode: %v", err)
 	}
-	t.Logf("Received messages: %v", code)
+	t.Logf("Received code: %s", code)
 	if code != "123456" {
 		t.Fatalf("Expected code 123456, got %s", code)
 	}
