@@ -7,7 +7,7 @@ import (
 )
 
 func TestChatGPT(t *testing.T) {
-	// gpt := NewChatGPTExecutor()
+	// gpt := NewChatGPTExecutor("http://127.0.0.1:3001")
 	// ctx := context.Background()
 	// cfg := map[string]interface{}{
 	// 	"proxy": "http://127.0.0.1:8866",

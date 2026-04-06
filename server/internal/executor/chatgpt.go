@@ -369,6 +369,7 @@ func (s *openAISession) setPassword(ctx context.Context, email, password string,
 		s.fillJsonHeaders(req)
 		req.Header.Set("Referer", "https://auth.openai.com/create-account/password")
 		req.Header.Set("openai-sentinel-token", string(sentinelToken))
+		req.Header.Set("priority", "u=1, i")
 	}
 
 	resp, err := s.noRedirect.Do(req)
@@ -768,13 +769,15 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 
 	e.step = "prepare_session"
 	var stepContext struct {
-		prepareResult *openAIPrepareResult
-		password      string
-		passResult    string
-		callbackUrl   string
-		tokenInfo     *openAITokenResult
-		resendCount   int
+		prepareResult    *openAIPrepareResult
+		password         string
+		passResult       string
+		callbackUrl      string
+		tokenInfo        *openAITokenResult
+		resendCount      int
+		maxRetryAttempts int
 	}
+	stepContext.maxRetryAttempts = 0
 executor_loop:
 	for {
 		switch e.step {
@@ -835,14 +838,14 @@ executor_loop:
 				return nil, err
 			}
 			stepContext.resendCount++
-			sendProgress(publish, taskID, 55+stepContext.resendCount*5, fmt.Sprintf("Resent OTP email (%d)…", stepContext.resendCount), "running")
+			sendProgress(publish, taskID, 55+stepContext.resendCount*5, fmt.Sprintf("Resent OTP email (%d/%d)…", stepContext.resendCount, stepContext.maxRetryAttempts), "running")
 			e.step = "wait_for_otp"
 		case "wait_for_otp":
 			// Wait for OTP and verify
 			sendProgress(publish, taskID, 58, "Waiting for email verification code…", "running")
 			otp, err := mp.WaitForCode(ctx, mailAccount, "openai", 30)
 			if err != nil {
-				if stepContext.resendCount >= 3 {
+				if stepContext.resendCount >= stepContext.maxRetryAttempts {
 					return nil, fmt.Errorf("failed to get OTP after %d attempts: %w", stepContext.resendCount, err)
 				}
 				sendProgress(publish, taskID, 55+stepContext.resendCount*5, fmt.Sprintf("Failed to get OTP, resend. reason: %v", err), "failed")

@@ -32,12 +32,14 @@ type taskProgressAggregator struct {
 	lastOverall int
 }
 
-func newTaskProgressAggregator(total int) *taskProgressAggregator {
+func newTaskProgressAggregator(total, initialCompleted, initialFailed int) *taskProgressAggregator {
 	if total <= 0 {
 		total = 1
 	}
 	return &taskProgressAggregator{
 		total:      total,
+		completed:  initialCompleted,
+		failed:     initialFailed,
 		inProgress: make(map[uint]int),
 		finished:   make(map[uint]bool),
 	}
@@ -141,11 +143,12 @@ func clampProgress(value int) int {
 }
 
 type TaskService struct {
-	repo       repository.TaskRepository
-	pool       *core.WorkerPool
-	db         *gorm.DB
-	proxyRes   *resource.ProxyResource
-	settingSvc *SettingService
+	repo        repository.TaskRepository
+	pool        *core.WorkerPool
+	db          *gorm.DB
+	proxyRes    *resource.ProxyResource
+	settingSvc  *SettingService
+	taskCancels sync.Map // taskID (uint) -> context.CancelFunc
 }
 
 func NewTaskService(repo repository.TaskRepository, pool *core.WorkerPool, db *gorm.DB, proxyRes *resource.ProxyResource, settingSvc *SettingService) *TaskService {
@@ -208,7 +211,29 @@ func (s *TaskService) Start(id uint) error {
 	if task.Status == model.TaskStatusRunning {
 		return errors.New("task is already running")
 	}
-	if err := s.repo.UpdateFields(id, map[string]interface{}{"status": model.TaskStatusRunning, "logs": ""}); err != nil {
+
+	// Cancel any in-flight dispatch for this task before starting a new one.
+	if cancel, ok := s.taskCancels.Load(id); ok {
+		cancel.(context.CancelFunc)()
+		s.taskCancels.Delete(id)
+	}
+
+	var fields map[string]interface{}
+	if task.Status == model.TaskStatusPaused {
+		// Resume: keep existing completed/failed counts and logs intact.
+		fields = map[string]interface{}{"status": model.TaskStatusRunning}
+	} else {
+		// Fresh start: reset all progress.
+		fields = map[string]interface{}{
+			"status":    model.TaskStatusRunning,
+			"completed": 0,
+			"failed":    0,
+			"logs":      "",
+		}
+		task.Completed = 0
+		task.Failed = 0
+	}
+	if err := s.repo.UpdateFields(id, fields); err != nil {
 		return err
 	}
 	task.Status = model.TaskStatusRunning
@@ -222,16 +247,56 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 	if total <= 0 {
 		total = 1
 	}
-	progressAgg := newTaskProgressAggregator(total)
+
+	// Create a per-task context so running and queued jobs can be cancelled on pause.
+	taskCtx, taskCancel := context.WithCancel(context.Background())
+	s.taskCancels.Store(task.ID, taskCancel)
+	defer func() {
+		taskCancel() // idempotent if already called by Pause
+		s.taskCancels.Delete(task.ID)
+	}()
+
+	// When resuming after pause, only dispatch the remaining jobs.
+	initialCompleted := task.Completed
+	initialFailed := task.Failed
+	alreadyDone := initialCompleted + initialFailed
+	remaining := total - alreadyDone
+	if remaining <= 0 {
+		s.repo.UpdateFields(task.ID, map[string]interface{}{"status": model.TaskStatusCompleted})
+		return
+	}
+
+	progressAgg := newTaskProgressAggregator(total, initialCompleted, initialFailed)
+
+	// Respect the per-task concurrency setting (default: 1).
+	concurrency := taskConfigInt(map[string]interface{}(task.Config), "concurrency", 1)
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	sem := make(chan struct{}, concurrency)
 
 	var wg sync.WaitGroup
-	for i := 0; i < total; i++ {
+	for i := 0; i < remaining; i++ {
+		// Stop submitting new jobs if the task context was cancelled (paused).
+		if taskCtx.Err() != nil {
+			log.Printf("Task %d context cancelled, stopping dispatch\n", task.ID)
+			return
+		}
+
 		current, err := s.repo.FindByID(task.ID)
 		if err != nil || current == nil {
 			break
 		}
 		if current.Status == model.TaskStatusPaused {
 			log.Printf("Task %d is paused, stopping dispatch\n", task.ID)
+			return
+		}
+
+		// Acquire semaphore slot before submitting — blocks until a worker slot is free.
+		select {
+		case sem <- struct{}{}:
+		case <-taskCtx.Done():
+			log.Printf("Task %d context cancelled while waiting for semaphore\n", task.ID)
 			return
 		}
 
@@ -247,8 +312,14 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 		wg.Add(1)
 		s.pool.Submit(core.Job{
 			ID: uint(jobID),
-			Execute: func(ctx context.Context, publish func(core.ProgressUpdate)) {
+			Execute: func(_ context.Context, publish func(core.ProgressUpdate)) {
 				defer wg.Done()
+				defer func() { <-sem }() // release semaphore slot when job finishes
+				// If the task was already cancelled before this job got to run,
+				// skip it silently without affecting counters.
+				if taskCtx.Err() != nil {
+					return
+				}
 				publishWithLog := func(update core.ProgressUpdate) {
 					aggregated := progressAgg.OnJobUpdate(uint(jobID), update)
 					s.appendProgressLog(taskID, aggregated)
@@ -266,7 +337,7 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 					return
 				}
 				log.Printf("Starting job %d for task %d\n", jobID, taskID)
-				result, err := exec.Execute(ctx, taskID, cfg, publishWithLog)
+				result, err := exec.Execute(taskCtx, taskID, cfg, publishWithLog)
 				if err == nil {
 					if result == nil || result.Account == nil {
 						err = errors.New("executor returned no account to persist")
@@ -286,6 +357,11 @@ func (s *TaskService) dispatchJobs(task model.TaskBatch) {
 							Status:   "completed",
 						})
 					}
+				}
+
+				// If cancelled due to pause, don't count this job as a failure.
+				if err != nil && (errors.Is(err, context.Canceled) || taskCtx.Err() != nil) {
+					return
 				}
 
 				if err != nil {
@@ -323,6 +399,12 @@ func (s *TaskService) Pause(id uint) error {
 	if task.Status != model.TaskStatusRunning {
 		return errors.New("task is not running")
 	}
+	// Cancel the running dispatch so queued and in-flight jobs stop as soon as
+	// possible without being counted as failures.
+	if cancel, ok := s.taskCancels.Load(id); ok {
+		cancel.(context.CancelFunc)()
+		s.taskCancels.Delete(id)
+	}
 	return s.repo.UpdateFields(id, map[string]interface{}{"status": model.TaskStatusPaused})
 }
 
@@ -337,13 +419,21 @@ func (s *TaskService) Retry(id uint) error {
 	if task.Status != model.TaskStatusFailed && task.Status != model.TaskStatusPaused {
 		return fmt.Errorf("task status is %s, can only retry failed or paused tasks", task.Status)
 	}
+	// Cancel any lingering dispatch before re-dispatching.
+	if cancel, ok := s.taskCancels.Load(id); ok {
+		cancel.(context.CancelFunc)()
+		s.taskCancels.Delete(id)
+	}
 	if err := s.repo.UpdateFields(id, map[string]interface{}{
-		"status": model.TaskStatusRunning,
-		"failed": 0,
-		"logs":   "",
+		"status":    model.TaskStatusRunning,
+		"completed": 0,
+		"failed":    0,
+		"logs":      "",
 	}); err != nil {
 		return err
 	}
+	task.Completed = 0
+	task.Failed = 0
 	task.Status = model.TaskStatusRunning
 	go s.dispatchJobs(*task)
 	return nil
@@ -450,6 +540,20 @@ func taskConfigUint(cfg map[string]interface{}, key string) uint {
 		}
 	}
 	return 0
+}
+
+func taskConfigInt(cfg map[string]interface{}, key string, defaultVal int) int {
+	if value, ok := cfg[key]; ok {
+		switch typed := value.(type) {
+		case float64:
+			return int(typed)
+		case int:
+			return typed
+		case uint:
+			return int(typed)
+		}
+	}
+	return defaultVal
 }
 
 func buildProxyURL(proxy *model.Proxy) string {

@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "server": "cd server && air",
+    "server": "cd server && $(go env GOPATH)/bin/air",
     "web": "cd web && pnpm run dev"
   },
   "keywords": [],
