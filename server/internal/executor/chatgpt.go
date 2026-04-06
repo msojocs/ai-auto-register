@@ -492,7 +492,7 @@ func (s *openAISession) verifyEmailOTP(ctx context.Context, email, otp string, p
 	return nil
 }
 
-func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAIPrepareResult) error {
+func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAIPrepareResult) (string, error) {
 	reqUrl := fmt.Sprintf("%s/api/accounts/create_account", openAIAuthBase)
 	jsonData := map[string]string{
 		"name":      "micro jans",
@@ -500,11 +500,11 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 	}
 	str, err := json.Marshal(jsonData)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqUrl, strings.NewReader(string(str)))
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	s.sentinelToken = openai.NewSentinelToken(s.sentinelBaseURL, "oauth_create_account", prepareResult.OaiDid)
@@ -512,7 +512,7 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 	{
 		headers, err := s.sentinelToken.GetSentinelHeader()
 		if err != nil {
-			return fmt.Errorf("chatgpt createAccount: failed to get sentinel header: %w", err)
+			return "", fmt.Errorf("chatgpt createAccount: failed to get sentinel header: %w", err)
 		}
 		sentinelTokenMap := map[string]string{
 			"p":    headers["p"],
@@ -523,7 +523,7 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 		}
 		sentinelToken, err := json.Marshal(sentinelTokenMap)
 		if err != nil {
-			return fmt.Errorf("chatgpt createAccount: failed to marshal sentinel token: %w", err)
+			return "", fmt.Errorf("chatgpt createAccount: failed to marshal sentinel token: %w", err)
 		}
 
 		s.fillJsonHeaders(req)
@@ -532,13 +532,13 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 	}
 	resp, err := s.noRedirect.Do(req)
 	if err != nil {
-		return fmt.Errorf("chatgpt createAccount: %w", err)
+		return "", fmt.Errorf("chatgpt createAccount: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("chatgpt createAccount: unexpected status code: %d; response: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("chatgpt createAccount: unexpected status code: %d; response: %s", resp.StatusCode, string(body))
 	}
 	var createResult struct {
 		Page struct {
@@ -546,13 +546,9 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 		} `json:"page"`
 	}
 	if err := json.Unmarshal(body, &createResult); err != nil {
-		return fmt.Errorf("chatgpt createAccount: failed to parse response: %w; response: %s", err, string(body))
+		return "", fmt.Errorf("chatgpt createAccount: failed to parse response: %w; response: %s", err, string(body))
 	}
-	if createResult.Page.Type == "add_phone" {
-		log.Printf("[WARN] chatgpt createAccount: phone verification required; account may be limited or blocked")
-		return nil
-	}
-	return nil
+	return createResult.Page.Type, nil
 }
 
 // getCallbackUrl completes the OAuth callback and extracts the session token.
@@ -777,7 +773,7 @@ func (e *ChatGPTExecutor) Execute(ctx context.Context, taskID uint, config map[s
 		resendCount      int
 		maxRetryAttempts int
 	}
-	stepContext.maxRetryAttempts = 0
+	stepContext.maxRetryAttempts = 3
 executor_loop:
 	for {
 		switch e.step {
@@ -846,6 +842,7 @@ executor_loop:
 			otp, err := mp.WaitForCode(ctx, mailAccount, "openai", 30)
 			if err != nil {
 				if stepContext.resendCount >= stepContext.maxRetryAttempts {
+					sendProgress(publish, taskID, 100, fmt.Sprintf("Failed to get OTP after %d attempts: %v", stepContext.resendCount, err), "running")
 					return nil, fmt.Errorf("failed to get OTP after %d attempts: %w", stepContext.resendCount, err)
 				}
 				sendProgress(publish, taskID, 55+stepContext.resendCount*5, fmt.Sprintf("Failed to get OTP, resend. reason: %v", err), "failed")
@@ -859,10 +856,14 @@ executor_loop:
 			}
 			e.step = "create_account"
 		case "create_account":
-			err := sess.createAccount(ctx, stepContext.prepareResult)
+			continueType, err := sess.createAccount(ctx, stepContext.prepareResult)
 			if err != nil {
 				sendProgress(publish, taskID, 100, fmt.Sprintf("Account creation failed: %v", err), "failed")
 				return nil, err
+			}
+
+			if continueType == "add_phone" {
+				sendProgress(publish, taskID, 80, "[WARN] chatgpt createAccount: phone verification required; account may be limited or blocked", "running")
 			}
 			sendProgress(publish, taskID, 80, "Account created successfully!", "running")
 			e.step = "get_callback_url"

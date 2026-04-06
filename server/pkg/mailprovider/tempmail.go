@@ -115,21 +115,10 @@ func (p *TempMailLolProvider) listMessages(ctx context.Context, token string) ([
 	return resp.Emails, nil
 }
 
-func (p *TempMailLolProvider) snapshot(ctx context.Context, token string) map[string]bool {
-	ids := make(map[string]bool)
-	msgs, _ := p.listMessages(ctx, token)
-	for _, m := range msgs {
-		if m.ID != "" {
-			ids[m.ID] = true
-		}
-	}
-	return ids
-}
-
 // WaitForCode polls for a new message and extracts an OTP code.
 func (p *TempMailLolProvider) WaitForCode(ctx context.Context, account *MailAccount, keyword string, timeoutSec int) (string, error) {
 	deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
-	seen := p.snapshot(ctx, account.Token)
+	seen := map[string]bool{}
 
 	for time.Now().Before(deadline) {
 		select {
@@ -163,7 +152,7 @@ func (p *TempMailLolProvider) WaitForCode(ctx context.Context, account *MailAcco
 // WaitForLink polls for a new message and extracts a verification URL.
 func (p *TempMailLolProvider) WaitForLink(ctx context.Context, account *MailAccount, keyword string, timeoutSec int) (string, error) {
 	deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
-	seen := p.snapshot(ctx, account.Token)
+	seen := map[string]bool{}
 
 	for time.Now().Before(deadline) {
 		select {

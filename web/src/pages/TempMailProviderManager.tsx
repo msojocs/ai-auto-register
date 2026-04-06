@@ -66,6 +66,9 @@ const PROVIDER_CONFIG_FIELDS: Record<string, { key: string; labelKey: string; pl
     { key: 'project_code', labelKey: 'tempMail.projectCode', placeholderKey: 'tempMail.projectCodePlaceholder', required: true },
     { key: 'email_type', labelKey: 'tempMail.emailType', placeholderKey: 'tempMail.emailTypePlaceholder' },
   ],
+  linshiyouxiang: [
+    { key: 'api_url', labelKey: 'tempMail.apiUrl', placeholderKey: 'tempMail.apiUrlPlaceholder' },
+  ],
 }
 
 const PROVIDER_TYPE_KEYS = Object.keys(PROVIDER_CONFIG_FIELDS)

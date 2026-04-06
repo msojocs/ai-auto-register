@@ -91,8 +91,10 @@ func New(providerType string, config map[string]string) (Provider, error) {
 		return NewMaliAPI(config), nil
 	case "luckmail":
 		return NewLuckMail(config), nil
+	case "linshiyouxiang", "lsyx":
+		return NewLinshiyouxiang(config), nil
 	default:
-		return nil, fmt.Errorf("mailprovider: unknown provider type %q (supported: mailtm, duckmail, cfworker, tempmail, moemail, freemail, laoudo, maliapi, luckmail)", providerType)
+		return nil, fmt.Errorf("mailprovider: unknown provider type %q (supported: mailtm, duckmail, cfworker, tempmail, moemail, freemail, laoudo, maliapi, luckmail, linshiyouxiang)", providerType)
 	}
 }
 

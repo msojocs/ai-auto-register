@@ -288,6 +288,7 @@ const en = {
       laoudo: 'Laoudo',
       maliapi: 'MaliAPI / YYDSMail',
       luckmail: 'LuckMail',
+      linshiyouxiang: 'Linshiyouxiang',
     },
   },
 } as const

@@ -288,6 +288,7 @@ const zh = {
       laoudo: 'Laoudo',
       maliapi: 'MaliAPI / YYDSMail',
       luckmail: 'LuckMail',
+      linshiyouxiang: '临时邮箱',
     },
   },
 } as const
