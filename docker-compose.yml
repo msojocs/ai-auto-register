@@ -11,20 +11,18 @@ services:
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-16byte}
       - GIN_MODE=release
-      # Uncomment the following lines to use MySQL instead of SQLite.
-      # Make sure to also start the 'mysql' service below.
-      #- DB_DRIVER=mysql
-      #- DB_HOST=mysql
-      #- DB_PORT=3306
-      #- DB_NAME=${MYSQL_DATABASE:-free2api}
-      #- DB_USER=${MYSQL_USER:-free2api}
-      #- DB_PASSWORD=${MYSQL_PASSWORD:-free2api_pass}
+      - DB_DRIVER=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-free2api}
+      - DB_USER=${POSTGRES_USER:-free2api}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-free2api_pass}
     volumes:
       - server-data:/app/data
       # Mount config directory so config.yaml is available inside the container.
       - ./server/config:/app/config
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
@@ -32,23 +30,20 @@ services:
       timeout: 10s
       retries: 3
 
-  # MySQL service — only needed when DB_DRIVER=mysql.
-  # Comment out this service (and the depends_on above) when using SQLite.
-  mysql:
-    image: mysql:8.0
-    container_name: free2api-mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: free2api-postgres
     restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_pass}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-free2api}
-      - MYSQL_USER=${MYSQL_USER:-free2api}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-free2api_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-free2api}
+      - POSTGRES_USER=${POSTGRES_USER:-free2api}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-free2api_pass}
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql-data:/var/lib/mysql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_pass}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-free2api} -d ${POSTGRES_DB:-free2api}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -74,4 +69,4 @@ services:
       - "3001:3000"
 volumes:
   server-data:
-  mysql-data:
+  postgres-data:

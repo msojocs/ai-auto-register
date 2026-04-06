@@ -2,11 +2,14 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm install
+# Install pnpm directly via npm from mirror, bypassing corepack network access
+RUN npm install -g pnpm@9 --registry=https://registry.npmmirror.com
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com
 
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 FROM nginx:alpine
 

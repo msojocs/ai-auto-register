@@ -6,9 +6,7 @@ settings:
 
 importers:
 
-  .: {}
-
-  web:
+  .:
     dependencies:
       '@ant-design/icons':
         specifier: ^5.0.0
@@ -841,8 +839,8 @@ packages:
     resolution: {integrity: sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ==}
     engines: {node: '>= 0.4'}
 
-  caniuse-lite@1.0.30001784:
-    resolution: {integrity: sha512-WU346nBTklUV9YfUl60fqRbU5ZqyXlqvo1SgigE1OAXK5bFL8LL9q1K7aap3N739l4BvNqnkm3YrGHiY9sfUQw==}
+  caniuse-lite@1.0.30001786:
+    resolution: {integrity: sha512-4oxTZEvqmLLrERwxO76yfKM7acZo310U+v4kqexI2TL1DkkUEMT8UijrxxcnVdxR3qkVf5awGRX+4Z6aPHVKrA==}
 
   classnames@2.5.1:
     resolution: {integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==}
@@ -1991,7 +1989,7 @@ snapshots:
   browserslist@4.28.2:
     dependencies:
       baseline-browser-mapping: 2.10.15
-      caniuse-lite: 1.0.30001784
+      caniuse-lite: 1.0.30001786
       electron-to-chromium: 1.5.331
       node-releases: 2.0.37
       update-browserslist-db: 1.2.3(browserslist@4.28.2)
@@ -2001,7 +1999,7 @@ snapshots:
       es-errors: 1.3.0
       function-bind: 1.1.2
 
-  caniuse-lite@1.0.30001784: {}
+  caniuse-lite@1.0.30001786: {}
 
   classnames@2.5.1: {}
 

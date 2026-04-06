@@ -8,7 +8,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 GOOS=linux go build -o free2api-server ./cmd/
+RUN CGO_ENABLED=1 CGO_CFLAGS="-D_LARGEFILE64_SOURCE" GOOS=linux go build -o free2api-server ./cmd/
 
 FROM alpine:3.19
 
