@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-let uuid = crypto.randomUUID();
 function N(t) {
     //   console.info("encode data:", t);
   const result =
