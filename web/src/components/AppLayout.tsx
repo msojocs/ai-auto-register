@@ -1,14 +1,16 @@
-import { Layout, Menu, Button, Typography, theme, Dropdown } from 'antd'
+import { useMemo } from 'react'
+import { Layout, Menu, Button, Typography, theme, Dropdown, Avatar, Space } from 'antd'
 import {
   DashboardOutlined,
   UnorderedListOutlined,
   UserOutlined,
   GlobalOutlined,
-  LogoutOutlined,
   SendOutlined,
   TranslationOutlined,
   InboxOutlined,
   SettingOutlined,
+  LockOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -27,6 +29,21 @@ export default function AppLayout() {
   function handleLogout() {
     logout()
     navigate('/login')
+  }
+
+  function getAvatarInitial(name: string | undefined): string {
+    if (!name) return '?'
+    const firstChar = Array.from(name.trim())[0]
+    return (firstChar || '?').toUpperCase()
+  }
+
+  function getAvatarColor(seed: string | undefined): string {
+    const text = seed || 'user'
+    let hash = 0
+    for (let i = 0; i < text.length; i += 1) {
+      hash = text.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return `hsl(${Math.abs(hash) % 360}, 62%, 46%)`
   }
 
   const menuItems = [
@@ -51,6 +68,40 @@ export default function AppLayout() {
       onClick: () => i18n.changeLanguage('zh'),
     },
   ]
+
+  const userMenuItems = [
+    {
+      key: 'change-password',
+      icon: <LockOutlined />,
+      label: t('userMenu.changePassword'),
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: t('nav.logout'),
+    },
+  ]
+
+  const avatarStyle = useMemo(
+    () => ({
+      backgroundColor: getAvatarColor(user?.username),
+      color: '#fff',
+      cursor: 'pointer',
+      userSelect: 'none' as const,
+      textTransform: 'uppercase' as const,
+    }),
+    [user?.username],
+  )
+
+  function handleUserMenuClick({ key }: { key: string }) {
+    if (key === 'logout') {
+      handleLogout()
+      return
+    }
+    if (key === 'change-password') {
+      navigate('/change-password')
+    }
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -85,24 +136,6 @@ export default function AppLayout() {
           onClick={({ key }) => navigate(key)}
           style={{ flex: 1, borderRight: 0 }}
         />
-        <div
-          style={{
-            padding: '16px',
-            borderTop: '1px solid rgba(255,255,255,0.1)',
-          }}
-        >
-          <Text style={{ color: 'rgba(255,255,255,0.65)', display: 'block', marginBottom: 8 }}>
-            {user?.username}
-          </Text>
-          <Button
-            icon={<LogoutOutlined />}
-            type="text"
-            style={{ color: 'rgba(255,255,255,0.65)', paddingLeft: 0 }}
-            onClick={handleLogout}
-          >
-            {t('nav.logout')}
-          </Button>
-        </div>
       </Sider>
       <Layout style={{ marginLeft: 200 }}>
         <Header
@@ -115,11 +148,20 @@ export default function AppLayout() {
             justifyContent: 'flex-end',
           }}
         >
-          <Dropdown menu={{ items: langMenuItems, selectedKeys: [i18n.language.startsWith('zh') ? 'zh' : 'en'] }} trigger={['click']}>
-            <Button icon={<TranslationOutlined />} type="text">
-              {i18n.language.startsWith('zh') ? t('lang.zh') : t('lang.en')}
-            </Button>
-          </Dropdown>
+          <Space size={8}>
+            <Dropdown menu={{ items: langMenuItems, selectedKeys: [i18n.language.startsWith('zh') ? 'zh' : 'en'] }} trigger={['click']}>
+              <Button icon={<TranslationOutlined />} type="text">
+                {i18n.language.startsWith('zh') ? t('lang.zh') : t('lang.en')}
+              </Button>
+            </Dropdown>
+            <Dropdown menu={{ items: userMenuItems, onClick: handleUserMenuClick }} trigger={['click']}>
+              {user?.avatar_url ? (
+                <Avatar src={user.avatar_url} style={{ cursor: 'pointer' }} />
+              ) : (
+                <Avatar style={avatarStyle}>{getAvatarInitial(user?.username)}</Avatar>
+              )}
+            </Dropdown>
+          </Space>
         </Header>
         <Content style={{ padding: 24, background: designToken.colorBgLayout }}>
           <Outlet />

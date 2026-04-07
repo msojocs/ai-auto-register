@@ -12,6 +12,7 @@ import ProxyManager from './pages/ProxyManager'
 import PushTemplateManager from './pages/PushTemplateManager'
 import SystemSettings from './pages/SystemSettings'
 import TempMailProviderManager from './pages/TempMailProviderManager'
+import ChangePassword from './pages/ChangePassword'
 import { useAuthStore } from './store/auth'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -43,6 +44,7 @@ export default function App() {
               <Route path="accounts" element={<AccountList />} />
               <Route path="proxies" element={<ProxyManager />} />
               <Route path="settings" element={<SystemSettings />} />
+              <Route path="change-password" element={<ChangePassword />} />
               <Route path="temp-mail-providers" element={<TempMailProviderManager />} />
               <Route path="push-templates" element={<PushTemplateManager />} />
             </Route>

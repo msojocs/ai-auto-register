@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware'
 interface User {
   id: number
   username: string
+  avatar_url?: string
 }
 
 interface AuthState {

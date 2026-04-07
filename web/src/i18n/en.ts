@@ -37,6 +37,20 @@ const en = {
     logout: 'Logout',
   },
 
+  userMenu: {
+    changePassword: 'Change Password',
+    currentPassword: 'Current Password',
+    currentPasswordRequired: 'Please enter your current password',
+    newPassword: 'New Password',
+    newPasswordRequired: 'Please enter a new password',
+    newPasswordMinLength: 'New password must be at least 6 characters',
+    confirmPassword: 'Confirm New Password',
+    confirmPasswordRequired: 'Please confirm your new password',
+    passwordNotMatch: 'The new passwords do not match',
+    passwordChanged: 'Password updated successfully',
+    passwordChangeFailed: 'Failed to update password',
+  },
+
   // Language switcher
   lang: {
     switch: 'Switch language',

@@ -37,6 +37,20 @@ const zh = {
     logout: '退出登录',
   },
 
+  userMenu: {
+    changePassword: '修改密码',
+    currentPassword: '当前密码',
+    currentPasswordRequired: '请输入当前密码',
+    newPassword: '新密码',
+    newPasswordRequired: '请输入新密码',
+    newPasswordMinLength: '新密码至少 6 位',
+    confirmPassword: '确认新密码',
+    confirmPasswordRequired: '请再次输入新密码',
+    passwordNotMatch: '两次输入的新密码不一致',
+    passwordChanged: '密码修改成功',
+    passwordChangeFailed: '修改密码失败',
+  },
+
   // Language switcher
   lang: {
     switch: '切换语言',

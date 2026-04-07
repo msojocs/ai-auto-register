@@ -48,3 +48,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, OK(gin.H{"token": token, "user": user}))
 }
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req struct {
+		CurrentPassword string `json:"current_password" binding:"required"`
+		NewPassword     string `json:"new_password" binding:"required,min=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
+		return
+	}
+	userIDRaw, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Fail(401, "unauthorized"))
+		return
+	}
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, Fail(401, "invalid user id"))
+		return
+	}
+	if err := h.svc.ChangePassword(userID, req.CurrentPassword, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, Fail(400, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, OK(gin.H{"changed": true}))
+}

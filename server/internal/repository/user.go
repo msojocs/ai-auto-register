@@ -20,6 +20,10 @@ func (r *userRepository) Create(user *model.User) error {
 	return r.db.Create(user).Error
 }
 
+func (r *userRepository) Update(user *model.User) error {
+	return r.db.Save(user).Error
+}
+
 func (r *userRepository) FindByUsername(username string) (*model.User, error) {
 	var user model.User
 	result := r.db.Where("username = ?", username).Limit(1).Find(&user)

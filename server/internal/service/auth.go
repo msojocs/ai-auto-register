@@ -116,3 +116,22 @@ func (s *AuthService) ValidateToken(tokenStr string) (*Claims, error) {
 	}
 	return claims, nil
 }
+
+func (s *AuthService) ChangePassword(userID uint, currentPassword, newPassword string) error {
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(currentPassword)); err != nil {
+		return errors.New("current password is incorrect")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	user.Password = string(hash)
+	return s.userRepo.Update(user)
+}

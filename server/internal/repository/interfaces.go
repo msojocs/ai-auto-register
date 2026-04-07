@@ -7,6 +7,7 @@ import (
 // UserRepository defines operations on the User entity.
 type UserRepository interface {
 	Create(user *model.User) error
+	Update(user *model.User) error
 	FindByUsername(username string) (*model.User, error)
 	FindByID(id uint) (*model.User, error)
 	Count() (int64, error)

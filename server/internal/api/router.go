@@ -66,6 +66,11 @@ func SetupRouter(
 
 	api := r.Group("/api", authMiddleware(authSvc))
 	{
+		authProtected := api.Group("/auth")
+		{
+			authProtected.POST("/change-password", authH.ChangePassword)
+		}
+
 		tasks := api.Group("/tasks")
 		{
 			tasks.GET("", taskH.List)
