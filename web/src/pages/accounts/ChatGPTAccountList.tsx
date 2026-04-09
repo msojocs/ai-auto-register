@@ -18,7 +18,6 @@ export default function ChatGPTAccountList() {
   const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<ChatGPTAccountDetailResult | null>(null)
-  const [tableVersion, setTableVersion] = useState(0)
 
   const columns: ColumnsType<Account> = useMemo(() => [
     {
@@ -54,7 +53,6 @@ export default function ChatGPTAccountList() {
     try {
       await refreshChatGPTToken(record.id)
       message.success(t('accounts.refreshTokenSuccess'))
-      setTableVersion((v) => v + 1)
     } catch {
       message.error(t('accounts.refreshTokenFailed'))
     } finally {
@@ -104,7 +102,6 @@ export default function ChatGPTAccountList() {
   return (
     <>
       <AccountTableTemplate
-        key={tableVersion}
         title={t('accounts.chatgptTitle')}
         accountType="chatgpt"
         extraColumns={columns}
