@@ -3,10 +3,12 @@ import api from './axios'
 export interface SystemSettings {
   id: number
   sentinel_base_url: string
+  account_action_proxy_group_id?: number
 }
 
 export interface UpdateSystemSettingsPayload {
   sentinel_base_url: string
+  account_action_proxy_group_id?: number
 }
 
 export function getSystemSettings() {

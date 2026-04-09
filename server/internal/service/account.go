@@ -7,21 +7,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/msojocs/free2api/server/internal/model"
 	"github.com/msojocs/free2api/server/internal/repository"
+	"github.com/msojocs/free2api/server/internal/resource"
 	"github.com/msojocs/free2api/server/pkg/crypto"
 	"github.com/msojocs/free2api/server/pkg/openai"
 )
 
 type AccountService struct {
-	repo repository.AccountRepository
+	repo        repository.AccountRepository
+	settingRepo repository.SettingRepository
+	proxyRes    *resource.ProxyResource
 }
 
-func NewAccountService(repo repository.AccountRepository) *AccountService {
-	return &AccountService{repo: repo}
+func NewAccountService(
+	repo repository.AccountRepository,
+	settingRepo repository.SettingRepository,
+	proxyRes *resource.ProxyResource,
+) *AccountService {
+	return &AccountService{
+		repo:        repo,
+		settingRepo: settingRepo,
+		proxyRes:    proxyRes,
+	}
 }
 
 func (s *AccountService) List(page, limit int, accountType string) ([]model.Account, int64, error) {
@@ -124,9 +137,15 @@ func (s *AccountService) checkChatGPTAccount(_ context.Context, account *model.A
 		return nil, errors.New("missing account_id in account extra field")
 	}
 
+	proxyURL, err := s.resolveAccountActionProxy()
+	if err != nil {
+		return nil, err
+	}
+
 	client, err := openai.NewCodexClient(openai.CodexConfig{
 		AccountId:   accountID,
 		AccessToken: accessToken,
+		ProxyURL:    proxyURL,
 	})
 	if err != nil {
 		return nil, err
@@ -174,10 +193,16 @@ func (s *AccountService) RefreshChatGPTToken(_ context.Context, id uint) (*ChatG
 		accountID = extractChatGPTAccountIDFromAccessToken(accessToken)
 	}
 
+	proxyURL, err := s.resolveAccountActionProxy()
+	if err != nil {
+		return nil, err
+	}
+
 	client, err := openai.NewCodexClient(openai.CodexConfig{
 		AccountId:    accountID,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		ProxyURL:     proxyURL,
 	})
 	if err != nil {
 		return nil, err
@@ -251,9 +276,15 @@ func (s *AccountService) GetChatGPTDetail(_ context.Context, id uint) (*ChatGPTA
 		return nil, errors.New("missing account_id in account extra field")
 	}
 
+	proxyURL, err := s.resolveAccountActionProxy()
+	if err != nil {
+		return nil, err
+	}
+
 	client, err := openai.NewCodexClient(openai.CodexConfig{
 		AccountId:   accountID,
 		AccessToken: accessToken,
+		ProxyURL:    proxyURL,
 	})
 	if err != nil {
 		return nil, err
@@ -309,4 +340,37 @@ func extractChatGPTAccountIDFromAccessToken(accessToken string) string {
 	}
 	accountID, _ := authData["chatgpt_account_id"].(string)
 	return strings.TrimSpace(accountID)
+}
+
+func (s *AccountService) resolveAccountActionProxy() (string, error) {
+	if s.settingRepo == nil || s.proxyRes == nil {
+		return "", nil
+	}
+	setting, err := s.settingRepo.Get()
+	if err != nil || setting == nil {
+		return "", err
+	}
+	if setting.AccountActionProxyGroupID == nil || *setting.AccountActionProxyGroupID == 0 {
+		return "", nil
+	}
+	proxy := s.proxyRes.NextByGroupID(*setting.AccountActionProxyGroupID)
+	if proxy == nil {
+		return "", nil
+	}
+	return buildAccountProxyURL(proxy), nil
+}
+
+func buildAccountProxyURL(proxy *model.Proxy) string {
+	protocol := strings.TrimSpace(proxy.Protocol)
+	if protocol == "" {
+		protocol = "http"
+	}
+	u := &url.URL{
+		Scheme: protocol,
+		Host:   net.JoinHostPort(proxy.Host, proxy.Port),
+	}
+	if proxy.Username != "" || proxy.Password != "" {
+		u.User = url.UserPassword(proxy.Username, proxy.Password)
+	}
+	return u.String()
 }

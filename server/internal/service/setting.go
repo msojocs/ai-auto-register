@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/msojocs/free2api/server/internal/model"
@@ -10,11 +11,20 @@ import (
 // SettingService manages global runtime settings.
 type SettingService struct {
 	repo               repository.SettingRepository
+	proxyGroupRepo     repository.ProxyGroupRepository
 	defaultSentinelURL string
 }
 
-func NewSettingService(repo repository.SettingRepository, defaultSentinelURL string) *SettingService {
-	return &SettingService{repo: repo, defaultSentinelURL: defaultSentinelURL}
+func NewSettingService(
+	repo repository.SettingRepository,
+	proxyGroupRepo repository.ProxyGroupRepository,
+	defaultSentinelURL string,
+) *SettingService {
+	return &SettingService{
+		repo:               repo,
+		proxyGroupRepo:     proxyGroupRepo,
+		defaultSentinelURL: defaultSentinelURL,
+	}
 }
 
 func (s *SettingService) Get() (*model.SystemSetting, error) {
@@ -38,14 +48,29 @@ func (s *SettingService) GetSentinelBaseURL() string {
 	return setting.SentinelBaseURL
 }
 
-func (s *SettingService) Save(sentinelBaseURL string) (*model.SystemSetting, error) {
+func (s *SettingService) Save(
+	sentinelBaseURL string,
+	accountActionProxyGroupID *uint,
+) (*model.SystemSetting, error) {
 	sentinelBaseURL = strings.TrimSpace(sentinelBaseURL)
 	if sentinelBaseURL == "" {
 		sentinelBaseURL = s.defaultSentinelURL
 	}
+
+	if accountActionProxyGroupID != nil {
+		group, err := s.proxyGroupRepo.FindByID(*accountActionProxyGroupID)
+		if err != nil {
+			return nil, err
+		}
+		if group == nil {
+			return nil, errors.New("proxy group not found")
+		}
+	}
+
 	setting := &model.SystemSetting{
-		ID:              1,
-		SentinelBaseURL: sentinelBaseURL,
+		ID:                        1,
+		SentinelBaseURL:           sentinelBaseURL,
+		AccountActionProxyGroupID: accountActionProxyGroupID,
 	}
 	if err := s.repo.Save(setting); err != nil {
 		return nil, err

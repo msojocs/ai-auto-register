@@ -61,9 +61,9 @@ func main() {
 		log.Printf("Created default admin account: %s", defaultAdmin.Username)
 		log.Println("WARNING: change the default admin password immediately after first login.")
 	}
-	settingSvc := service.NewSettingService(settingRepo, cfg.Executor.SentinelBaseURL)
+	settingSvc := service.NewSettingService(settingRepo, proxyGroupRepo, cfg.Executor.SentinelBaseURL)
 	taskSvc := service.NewTaskService(taskRepo, pool, model.DB, proxyRes, settingSvc)
-	accountSvc := service.NewAccountService(accountRepo)
+	accountSvc := service.NewAccountService(accountRepo, settingRepo, proxyRes)
 	proxySvc := service.NewProxyService(proxyRepo, proxyGroupRepo, proxyRes)
 	proxyGroupSvc := service.NewProxyGroupService(proxyGroupRepo, proxyRepo)
 	pushTemplateSvc := service.NewPushTemplateService(pushTemplateRepo, accountRepo)

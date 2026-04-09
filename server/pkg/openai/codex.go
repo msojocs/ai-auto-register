@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strings"
 
 	"golang.org/x/net/publicsuffix"
@@ -27,6 +28,7 @@ type CodexConfig struct {
 	RefreshToken string
 	ServerURL    string
 	OAuthServer  string
+	ProxyURL     string
 }
 
 type CodexUsageResponse struct {
@@ -92,13 +94,21 @@ func NewCodexClient(config CodexConfig) (*CodexClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	transport := &http.Transport{}
+	if strings.TrimSpace(config.ProxyURL) != "" {
+		proxyURL, err := url.Parse(config.ProxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid proxy url: %w", err)
+		}
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
 	return &CodexClient{
 		accountId:    config.AccountId,
 		accessToken:  config.AccessToken,
 		refreshToken: config.RefreshToken,
 		serverURL:    config.ServerURL,
 		oauthServer:  config.OAuthServer,
-		client:       &http.Client{Jar: jar},
+		client:       &http.Client{Jar: jar, Transport: transport},
 	}, nil
 }
 
