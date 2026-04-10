@@ -345,6 +345,7 @@ const zh = {
       maliapi: 'MaliAPI / YYDSMail',
       luckmail: 'LuckMail',
       linshiyouxiang: '临时邮箱',
+      tempmailorg: 'TempMail.org',
     },
   },
 } as const

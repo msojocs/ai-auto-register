@@ -345,6 +345,7 @@ const en = {
       maliapi: 'MaliAPI / YYDSMail',
       luckmail: 'LuckMail',
       linshiyouxiang: 'Linshiyouxiang',
+      tempmailorg: 'TempMail.org',
     },
   },
 } as const

@@ -48,6 +48,9 @@ const PROVIDER_CONFIG_FIELDS: Record<
   linshiyouxiang: [
     { key: 'api_url', labelKey: 'tempMail.apiUrl', placeholderKey: 'tempMail.apiUrlPlaceholder' },
   ],
+  tempmailorg: [
+    { key: 'api_url', labelKey: 'tempMail.apiUrl', placeholderKey: 'tempMail.apiUrlPlaceholder' },
+  ],
 }
 
 const PROVIDER_TYPE_KEYS = Object.keys(PROVIDER_CONFIG_FIELDS)
