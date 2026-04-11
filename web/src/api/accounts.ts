@@ -15,11 +15,23 @@ export function getAccounts(params?: { type?: string; status?: string }) {
   return api.get<{ accounts: Account[]; total: number }>('/accounts', { params })
 }
 
-export function exportAccounts(format: 'csv' | 'json', type?: string) {
+export function exportAccounts(type?: string) {
   return api.get('/accounts/export', {
-    params: { format, type },
+    params: { type },
     responseType: 'blob',
   })
+}
+
+export interface ImportAccountRecord {
+  email: string
+  password: string
+  type: string
+  status?: string
+  extra?: Record<string, unknown>
+}
+
+export function importAccounts(records: ImportAccountRecord[]) {
+  return api.post<{ imported: number; skipped: number; failed: number }>('/accounts/import', records)
 }
 
 export interface AccountCheckResult {

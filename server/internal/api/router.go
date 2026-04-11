@@ -89,6 +89,7 @@ func SetupRouter(
 			accounts.GET("", accountH.List)
 			accounts.DELETE("/:id", accountH.Delete)
 			accounts.GET("/export", accountH.Export)
+			accounts.POST("/import", accountH.Import)
 			accounts.POST("/:id/check", accountH.Check)
 			accounts.POST("/:id/chatgpt/refresh-token", accountH.RefreshChatGPTToken)
 			accounts.GET("/:id/chatgpt/detail", accountH.ChatGPTDetail)

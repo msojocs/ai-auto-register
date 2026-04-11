@@ -55,6 +55,15 @@ func (r *accountRepository) ListAll(accountType string) ([]model.Account, error)
 	return accounts, err
 }
 
+func (r *accountRepository) FindByEmail(email string) (*model.Account, error) {
+	var account model.Account
+	err := r.db.Where("email = ?", email).First(&account).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &account, err
+}
+
 func (r *accountRepository) Delete(id uint) error {
 	return r.db.Delete(&model.Account{}, id).Error
 }

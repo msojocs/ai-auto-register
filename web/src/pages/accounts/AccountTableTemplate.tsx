@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, useCallback, type Key, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef, type Key, type ReactNode } from 'react'
 import { Table, Button, Space, Select, Typography, message, Dropdown, Popconfirm, Popover } from 'antd'
 import { DownloadOutlined, ReloadOutlined, UploadOutlined, SafetyOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import StatusTag from '../../components/StatusTag'
-import { getAccounts, exportAccounts, checkAccount, deleteAccount, type Account } from '../../api/accounts'
+import { getAccounts, exportAccounts, importAccounts, checkAccount, deleteAccount, type Account } from '../../api/accounts'
 import { getTemplatesForUpload, pushAccountToTemplate, type PushTemplate } from '../../api/pushTemplates'
 
 const { Title } = Typography
@@ -80,19 +80,37 @@ export default function AccountTableTemplate({
     void fetchAccounts()
   }, [fetchAccounts])
 
-  const handleExport = useCallback(async (format: 'csv' | 'json') => {
+  const importFileRef = useRef<HTMLInputElement>(null)
+
+  const handleExport = useCallback(async () => {
     try {
-      const { data } = await exportAccounts(format, accountType)
+      const { data } = await exportAccounts(accountType)
       const url = URL.createObjectURL(data as Blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `accounts.${format}`
+      a.download = 'accounts.json'
       a.click()
       URL.revokeObjectURL(url)
     } catch {
       message.error(t('accounts.exportFailed'))
     }
   }, [accountType, t])
+
+  const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const records = JSON.parse(text)
+      const { data } = await importAccounts(records)
+      message.success(t('accounts.importSuccess', { imported: data.imported, skipped: data.skipped, failed: data.failed }))
+      await fetchAccounts()
+    } catch {
+      message.error(t('accounts.importFailed'))
+    } finally {
+      e.target.value = ''
+    }
+  }, [fetchAccounts, t])
 
   const handlePushToTemplate = useCallback(
     async (account: Account, templateId: number, templateName: string) => {
@@ -353,11 +371,18 @@ export default function AccountTableTemplate({
           <Button icon={<ReloadOutlined />} onClick={() => void fetchAccounts()} loading={loading}>
             {t('accounts.refresh')}
           </Button>
-          <Button icon={<DownloadOutlined />} onClick={() => void handleExport('csv')}>
-            {t('accounts.exportCsv')}
-          </Button>
-          <Button icon={<DownloadOutlined />} onClick={() => void handleExport('json')}>
+          <Button icon={<DownloadOutlined />} onClick={() => void handleExport()}>
             {t('accounts.exportJson')}
+          </Button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".json"
+            style={{ display: 'none' }}
+            onChange={(e) => void handleImportFile(e)}
+          />
+          <Button icon={<UploadOutlined />} onClick={() => importFileRef.current?.click()}>
+            {t('accounts.importJson')}
           </Button>
         </Space>
       </div>

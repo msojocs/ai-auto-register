@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/base64"
-	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,32 +45,103 @@ func (s *AccountService) Delete(id uint) error {
 	return s.repo.Delete(id)
 }
 
-func (s *AccountService) Export(accountType string) (string, error) {
+type exportRecord struct {
+	Email    string          `json:"email"`
+	Password string          `json:"password"`
+	Type     string          `json:"type"`
+	Status   string          `json:"status"`
+	Extra    json.RawMessage `json:"extra,omitempty"`
+}
+
+func (s *AccountService) Export(accountType string) ([]byte, error) {
 	accounts, err := s.repo.ListAll(accountType)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var sb strings.Builder
-	w := csv.NewWriter(&sb)
-	_ = w.Write([]string{"id", "email", "password", "type", "status", "task_batch_id", "created_at"})
+	records := make([]exportRecord, 0, len(accounts))
 	for _, a := range accounts {
-		password, err := crypto.Decrypt(a.Password)
-		if err != nil {
-			password = "[decryption error]"
+		password, decErr := crypto.Decrypt(a.Password)
+		if decErr != nil {
+			password = ""
 		}
-		_ = w.Write([]string{
-			fmt.Sprintf("%d", a.ID),
-			a.Email,
-			password,
-			a.Type,
-			a.Status,
-			fmt.Sprintf("%d", a.TaskBatchID),
-			a.CreatedAt.Format("2006-01-02 15:04:05"),
+		var extra json.RawMessage
+		if a.Extra != "" {
+			extra = json.RawMessage(a.Extra)
+		}
+		records = append(records, exportRecord{
+			Email:    a.Email,
+			Password: password,
+			Type:     a.Type,
+			Status:   a.Status,
+			Extra:    extra,
 		})
 	}
-	w.Flush()
-	return sb.String(), w.Error()
+	return json.Marshal(records)
+}
+
+// ImportAccountRecord is the shape of each item in an import JSON file.
+type ImportAccountRecord struct {
+	Email    string          `json:"email"`
+	Password string          `json:"password"`
+	Type     string          `json:"type"`
+	Status   string          `json:"status"`
+	Extra    json.RawMessage `json:"extra"`
+}
+
+// ImportResult holds the outcome counts of an import operation.
+type ImportResult struct {
+	Imported int `json:"imported"`
+	Skipped  int `json:"skipped"`
+	Failed   int `json:"failed"`
+}
+
+// Import creates accounts from a slice of records.  Passwords are encrypted
+// before storage.  Records missing email or type are silently skipped.
+// Existing emails (same email) are skipped to avoid duplicates.
+func (s *AccountService) Import(records []ImportAccountRecord) (*ImportResult, error) {
+	result := &ImportResult{}
+	for _, rec := range records {
+		if rec.Email == "" || rec.Type == "" {
+			result.Skipped++
+			continue
+		}
+		existing, err := s.repo.FindByEmail(rec.Email)
+		if err != nil {
+			result.Failed++
+			continue
+		}
+		if existing != nil {
+			result.Skipped++
+			continue
+		}
+		password, err := crypto.Encrypt(rec.Password)
+		if err != nil {
+			result.Failed++
+			continue
+		}
+		extra := ""
+		if len(rec.Extra) > 0 {
+			extra = string(rec.Extra)
+		}
+		status := rec.Status
+		if status == "" {
+			status = "active"
+		}
+		account := &model.Account{
+			Email:    rec.Email,
+			Password: password,
+			Type:     rec.Type,
+			Status:   status,
+			Extra:    extra,
+		}
+		if err := s.repo.Create(account); err != nil {
+			result.Failed++
+			continue
+		}
+		result.Imported++
+	}
+	return result, nil
 }
 
 type AccountCheckResult struct {

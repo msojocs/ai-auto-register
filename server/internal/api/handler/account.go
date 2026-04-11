@@ -49,14 +49,27 @@ func (h *AccountHandler) Delete(c *gin.Context) {
 
 func (h *AccountHandler) Export(c *gin.Context) {
 	accountType := c.Query("type")
-	csv, err := h.svc.Export(accountType)
+	data, err := h.svc.Export(accountType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
 		return
 	}
-	c.Header("Content-Type", "text/csv")
-	c.Header("Content-Disposition", "attachment; filename=accounts.csv")
-	c.String(http.StatusOK, csv)
+	c.Header("Content-Disposition", "attachment; filename=accounts.json")
+	c.Data(http.StatusOK, "application/json", data)
+}
+
+func (h *AccountHandler) Import(c *gin.Context) {
+	var records []service.ImportAccountRecord
+	if err := c.ShouldBindJSON(&records); err != nil {
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid JSON: "+err.Error()))
+		return
+	}
+	result, err := h.svc.Import(records)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, OK(result))
 }
 
 func (h *AccountHandler) Check(c *gin.Context) {

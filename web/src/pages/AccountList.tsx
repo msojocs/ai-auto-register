@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Table,
   Button,
@@ -14,7 +14,7 @@ import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import StatusTag from '../components/StatusTag'
-import { getAccounts, exportAccounts, checkAccount, deleteAccount, type Account } from '../api/accounts'
+import { getAccounts, exportAccounts, importAccounts, checkAccount, deleteAccount, type Account } from '../api/accounts'
 import { getTemplatesForUpload, pushAccountToTemplate, type PushTemplate } from '../api/pushTemplates'
 
 const { Title } = Typography
@@ -73,17 +73,35 @@ export default function AccountList() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountType, status])
 
-  async function handleExport(format: 'csv' | 'json') {
+  const importFileRef = useRef<HTMLInputElement>(null)
+
+  async function handleExport() {
     try {
-      const { data } = await exportAccounts(format)
+      const { data } = await exportAccounts(accountType || undefined)
       const url = URL.createObjectURL(data as Blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `accounts.${format}`
+      a.download = 'accounts.json'
       a.click()
       URL.revokeObjectURL(url)
     } catch {
       message.error(t('accounts.exportFailed'))
+    }
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const records = JSON.parse(text)
+      const { data } = await importAccounts(records)
+      message.success(t('accounts.importSuccess', { imported: data.imported, skipped: data.skipped, failed: data.failed }))
+      await fetchAccounts()
+    } catch {
+      message.error(t('accounts.importFailed'))
+    } finally {
+      e.target.value = ''
     }
   }
 
@@ -225,11 +243,18 @@ export default function AccountList() {
           <Button icon={<ReloadOutlined />} onClick={fetchAccounts} loading={loading}>
             {t('accounts.refresh')}
           </Button>
-          <Button icon={<DownloadOutlined />} onClick={() => handleExport('csv')}>
-            {t('accounts.exportCsv')}
-          </Button>
-          <Button icon={<DownloadOutlined />} onClick={() => handleExport('json')}>
+          <Button icon={<DownloadOutlined />} onClick={() => void handleExport()}>
             {t('accounts.exportJson')}
+          </Button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".json"
+            style={{ display: 'none' }}
+            onChange={(e) => void handleImportFile(e)}
+          />
+          <Button icon={<UploadOutlined />} onClick={() => importFileRef.current?.click()}>
+            {t('accounts.importJson')}
           </Button>
         </Space>
       </div>

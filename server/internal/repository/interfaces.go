@@ -29,6 +29,7 @@ type AccountRepository interface {
 	Create(account *model.Account) error
 	Update(account *model.Account) error
 	FindByID(id uint) (*model.Account, error)
+	FindByEmail(email string) (*model.Account, error)
 	List(offset, limit int, accountType string) ([]model.Account, int64, error)
 	ListAll(accountType string) ([]model.Account, error)
 	Delete(id uint) error
