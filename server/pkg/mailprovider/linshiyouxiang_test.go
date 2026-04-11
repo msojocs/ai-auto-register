@@ -30,7 +30,7 @@ func TestLinshiyouxiangReceive(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	provider := NewLinshiyouxiang(map[string]string{
+	provider, _ := NewLinshiyouxiang(map[string]string{
 		"api_url": ts.URL,
 	})
 

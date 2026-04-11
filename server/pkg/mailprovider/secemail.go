@@ -31,7 +31,7 @@ type SeceMailProvider struct {
 const defaultSeceMailURL = "https://www.1secemail.com"
 
 // NewSeceMail returns a SeceMailProvider.
-func NewSeceMail(config map[string]string) *SeceMailProvider {
+func NewSeceMail(config map[string]string) (*SeceMailProvider, error) {
 	u := config["api_url"]
 	if u == "" {
 		u = defaultSeceMailURL
@@ -40,7 +40,7 @@ func NewSeceMail(config map[string]string) *SeceMailProvider {
 		PublicSuffixList: publicsuffix.List,
 	})
 	if err != nil {
-		log.Fatalf("failed to create cookie jar: %v", err)
+		return nil, err
 	}
 	return &SeceMailProvider{
 		apiURL: strings.TrimRight(u, "/"),
@@ -49,7 +49,7 @@ func NewSeceMail(config map[string]string) *SeceMailProvider {
 			Jar:       jar,
 			Transport: buildTransport(config["proxy_url"]),
 		},
-	}
+	}, nil
 }
 
 func (p *SeceMailProvider) do(ctx context.Context, method, path string, body io.Reader, headers map[string]string) ([]byte, error) {

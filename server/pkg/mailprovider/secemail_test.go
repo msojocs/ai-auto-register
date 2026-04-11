@@ -63,7 +63,7 @@ func TestSeceMailReceive(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	provider := NewSeceMail(map[string]string{
+	provider, _ := NewSeceMail(map[string]string{
 		"api_url": ts.URL,
 	})
 

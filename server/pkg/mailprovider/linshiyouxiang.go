@@ -36,7 +36,7 @@ type LinshiyouxiangProvider struct {
 const defaultLinshiyouxiangURL = "https://deepmails.org"
 
 // NewLinshiyouxiang returns a LinshiyouxiangProvider.
-func NewLinshiyouxiang(config map[string]string) *LinshiyouxiangProvider {
+func NewLinshiyouxiang(config map[string]string) (*LinshiyouxiangProvider, error) {
 	u := config["api_url"]
 	if u == "" {
 		u = defaultLinshiyouxiangURL
@@ -44,7 +44,7 @@ func NewLinshiyouxiang(config map[string]string) *LinshiyouxiangProvider {
 	// cookies
 	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	return &LinshiyouxiangProvider{
@@ -54,7 +54,7 @@ func NewLinshiyouxiang(config map[string]string) *LinshiyouxiangProvider {
 			Jar:       jar,
 			Transport: buildTransport(config["proxy_url"]),
 		},
-	}
+	}, nil
 }
 
 func (p *LinshiyouxiangProvider) authHeaders() map[string]string {

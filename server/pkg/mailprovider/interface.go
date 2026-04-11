@@ -94,11 +94,11 @@ func New(providerType string, config map[string]string) (Provider, error) {
 	case "luckmail":
 		return NewLuckMail(config), nil
 	case "linshiyouxiang", "lsyx":
-		return NewLinshiyouxiang(config), nil
+		return NewLinshiyouxiang(config)
 	case "tempmailorg", "tempmail_org":
 		return NewTempMailOrg(config), nil
 	case "secemail", "1secemail":
-		return NewSeceMail(config), nil
+		return NewSeceMail(config)
 	default:
 		return nil, fmt.Errorf("mailprovider: unknown provider type %q (supported: mailtm, duckmail, cfworker, tempmail, moemail, freemail, laoudo, maliapi, luckmail, linshiyouxiang, tempmailorg)", providerType)
 	}
@@ -113,7 +113,7 @@ func New(providerType string, config map[string]string) (Provider, error) {
 // treat nil as http.DefaultTransport).
 func buildTransport(proxyURL string) *http.Transport {
 	if proxyURL == "" {
-		return nil
+		return &http.Transport{}
 	}
 	u, err := url.Parse(proxyURL)
 	if err != nil {
