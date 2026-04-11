@@ -97,9 +97,6 @@ func (s *TempMailProviderService) Delete(id uint) error {
 	if p == nil {
 		return errors.New("temp mail provider not found")
 	}
-	if p.IsSystem {
-		return errors.New("cannot delete system temp mail provider")
-	}
 	return s.repo.Delete(id)
 }
 

@@ -10,5 +10,4 @@ type TempMailProvider struct {
 	Config       JSONMap `gorm:"type:text" json:"config"`       // provider-specific key/value pairs
 	Enabled      bool    `gorm:"default:true" json:"enabled"`
 	Description  string  `json:"description"`
-	IsSystem     bool    `gorm:"default:false" json:"is_system"` // true if this is a built-in provider that should not be deleted
 }

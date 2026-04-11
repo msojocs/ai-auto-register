@@ -70,13 +70,12 @@ func SeedPushTemplate(db *gorm.DB) {
 func SeedTempMailProviders(db *gorm.DB) {
 	providers := []TempMailProvider{
 		{
-			Name:         "TempMail",
+			Name:         "TempMail.lol",
 			ProviderType: "tempmail",
 			Config: JSONMap{
 				"version": "1",
 			},
 			Description: "Temp mail provider with API at https://api.tempmail.lol. No auth required.",
-			IsSystem:    true,
 			Enabled:     true,
 		},
 	}
