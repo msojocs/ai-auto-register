@@ -94,7 +94,6 @@ export default function TaskList() {
     fetchTasks()
     fetchTempMailProviders()
     fetchProxyGroups()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

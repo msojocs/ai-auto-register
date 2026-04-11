@@ -35,7 +35,6 @@ export default function Dashboard() {
     fetchStats()
     const timer = setInterval(fetchStats, POLL_INTERVAL)
     return () => clearInterval(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (

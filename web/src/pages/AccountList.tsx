@@ -77,7 +77,6 @@ export default function AccountList() {
   useEffect(() => {
     setPage(1)
     fetchAccounts(1)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountType, status])
 
   const importFileRef = useRef<HTMLInputElement>(null)

@@ -46,7 +46,6 @@ export default function TempMailProviderManager() {
 
   useEffect(() => {
     fetchProviders()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function openCreate() {

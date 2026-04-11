@@ -58,7 +58,6 @@ export default function PushTemplateManager() {
 
   useEffect(() => {
     fetchTemplates()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function openCreate() {

@@ -85,13 +85,10 @@ export default function AccountTableTemplate({
 
   useEffect(() => {
     setPage(1)
-    void fetchAccounts(1)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountType, status])
 
   useEffect(() => {
-    if (page !== 1) void fetchAccounts(page)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    void fetchAccounts(page)
   }, [page])
 
   const importFileRef = useRef<HTMLInputElement>(null)

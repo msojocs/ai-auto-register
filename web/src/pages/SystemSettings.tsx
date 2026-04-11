@@ -44,7 +44,6 @@ export default function SystemSettings() {
   useEffect(() => {
     void fetchSettings()
     void fetchProxyGroups()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleSave(values: {

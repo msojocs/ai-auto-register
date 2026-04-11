@@ -52,7 +52,6 @@ export default function ProxyManager() {
   useEffect(() => {
     fetchProxies()
     fetchGroups()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function normalizePayload(values: ProxyFormValues): CreateProxyPayload {
