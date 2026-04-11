@@ -247,7 +247,7 @@ export default function AccountList() {
           {t('accounts.title')}
         </Title>
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchAccounts} loading={loading}>
+          <Button icon={<ReloadOutlined />} onClick={() => void fetchAccounts()} loading={loading}>
             {t('accounts.refresh')}
           </Button>
           <Button icon={<DownloadOutlined />} onClick={() => void handleExport()}>
