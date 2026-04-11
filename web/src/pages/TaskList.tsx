@@ -317,6 +317,7 @@ export default function TaskList() {
         }}
         loading={loading}
         pagination={{ pageSize: 10 }}
+        scroll={{ x: 'max-content' }}
       />
 
       {/* Create Task Wizard */}

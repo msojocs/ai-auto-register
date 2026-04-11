@@ -131,7 +131,7 @@ export default function ProxyGroupManager() {
         </Button>
       </div>
 
-      <Table columns={columns} dataSource={groups} rowKey="id" loading={loading} pagination={false} />
+      <Table columns={columns} dataSource={groups} rowKey="id" loading={loading} pagination={false} scroll={{ x: 'max-content' }} />
 
       <Modal
         title={editingGroup ? t('proxyGroups.editTitle', { name: editingGroup.name }) : t('proxyGroups.newTitle')}

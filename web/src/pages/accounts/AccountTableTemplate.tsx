@@ -381,6 +381,7 @@ export default function AccountTableTemplate({
         }}
         loading={loading}
         pagination={{ pageSize: 20 }}
+        scroll={{ x: 'max-content' }}
       />
     </div>
   )

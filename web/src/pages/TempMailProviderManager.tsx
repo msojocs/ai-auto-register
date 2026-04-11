@@ -186,6 +186,7 @@ export default function TempMailProviderManager() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 20 }}
+        scroll={{ x: 'max-content' }}
       />
 
       <TempMailProviderFormModal

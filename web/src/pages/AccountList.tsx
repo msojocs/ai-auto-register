@@ -255,6 +255,7 @@ export default function AccountList() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 20 }}
+        scroll={{ x: 'max-content' }}
       />
     </div>
   )

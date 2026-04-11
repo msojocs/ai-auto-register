@@ -204,6 +204,7 @@ export default function ProxyManager() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 20 }}
+        scroll={{ x: 'max-content' }}
       />
 
       <ProxyFormModal
