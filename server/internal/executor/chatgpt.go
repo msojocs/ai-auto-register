@@ -927,8 +927,61 @@ executor_loop:
 		Extra:       extra,
 	}
 
+	// Query usage immediately after registration while we already have the token.
+	if stepContext.tokenInfo != nil {
+		accessToken := stepContext.tokenInfo.AccessToken
+		accountID := extractAccountIDFromJWT(accessToken)
+		proxyURL := cfgStr(config, "proxy", "")
+		if client, clientErr := openai.NewCodexClient(openai.CodexConfig{
+			AccountId:   accountID,
+			AccessToken: accessToken,
+			ProxyURL:    proxyURL,
+		}); clientErr == nil {
+			if usageResp, usageErr := client.QueryUsage(); usageErr == nil {
+				acct.Usage = buildUsageMap(usageResp)
+			} else {
+				log.Printf("[chatgpt] post-registration usage query failed: %v", usageErr)
+			}
+		}
+	}
+
 	return &ExecutionResult{
 		Account:        acct,
 		SuccessMessage: fmt.Sprintf("✓ ChatGPT account registered: %s", email),
 	}, nil
+}
+
+// extractAccountIDFromJWT parses the chatgpt_account_id claim from an OpenAI JWT.
+func extractAccountIDFromJWT(accessToken string) string {
+	parts := strings.Split(accessToken, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return ""
+	}
+	auth, _ := claims["https://api.openai.com/auth"].(map[string]interface{})
+	id, _ := auth["chatgpt_account_id"].(string)
+	return strings.TrimSpace(id)
+}
+
+// buildUsageMap converts a CodexUsageResponse into the JSONMap stored on Account.Usage.
+func buildUsageMap(u *openai.CodexUsageResponse) model.JSONMap {
+	if u == nil {
+		return model.JSONMap{}
+	}
+	return model.JSONMap{
+		"metric":               "rate_limit",
+		"used_percent":         u.RateLimit.PrimaryWindow.UsedPercent,
+		"limit_reached":        u.RateLimit.LimitReached,
+		"allowed":              u.RateLimit.Allowed,
+		"limit_window_seconds": u.RateLimit.PrimaryWindow.LimitWindowSeconds,
+		"reset_after_seconds":  u.RateLimit.PrimaryWindow.ResetAfterSeconds,
+		"reset_at":             u.RateLimit.PrimaryWindow.ResetAt,
+	}
 }
