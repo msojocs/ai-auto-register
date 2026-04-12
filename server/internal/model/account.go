@@ -7,6 +7,6 @@ type Account struct {
 	Type        string  `json:"type"`
 	Status      string  `gorm:"default:'active'" json:"status"`
 	TaskBatchID uint    `json:"task_batch_id"`
-	Extra       string  `gorm:"type:text" json:"extra"`
+	Extra       JSONMap `gorm:"type:text" json:"extra"`
 	Usage       JSONMap `gorm:"type:text" json:"usage"`
 }

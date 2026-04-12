@@ -344,20 +344,19 @@ func (e *GrokExecutor) Execute(ctx context.Context, taskID uint, config map[stri
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Encrypt error: %v", err), "failed")
 		return nil, err
 	}
-	extraMap := map[string]string{
+	extraMap := model.JSONMap{
 		"sso":         sso,
 		"sso_rw":      cookies["sso-rw"],
 		"given_name":  givenName,
 		"family_name": familyName,
 	}
-	extraJSON, _ := json.Marshal(extraMap)
 	acct := &model.Account{
 		Email:       email,
 		Password:    encPass,
 		Type:        "grok",
 		Status:      "active",
 		TaskBatchID: taskID,
-		Extra:       string(extraJSON),
+		Extra:       extraMap,
 	}
 
 	msg := fmt.Sprintf("✓ Grok account registered: %s", email)

@@ -1276,20 +1276,19 @@ func (e *KiroExecutor) Execute(ctx context.Context, taskID uint, config map[stri
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Encrypt error: %v", err), "failed")
 		return nil, err
 	}
-	extraMap := map[string]interface{}{
+	extraMap := model.JSONMap{
 		"name":         fullName,
 		"accessToken":  tokens["accessToken"],
 		"sessionToken": tokens["sessionToken"],
 		"csrfToken":    tokens["csrfToken"],
 	}
-	extraJSON, _ := json.Marshal(extraMap)
 	acct := &model.Account{
 		Email:       email,
 		Password:    encPass,
 		Type:        "kiro",
 		Status:      "active",
 		TaskBatchID: taskID,
-		Extra:       string(extraJSON),
+		Extra:       extraMap,
 	}
 
 	accessToken, _ := tokens["accessToken"].(string)

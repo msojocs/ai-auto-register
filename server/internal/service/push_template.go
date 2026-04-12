@@ -194,10 +194,9 @@ func (s *PushTemplateService) PushAccountByID(accountID, templateID uint) (int, 
 
 	plainPassword, _ := crypto.Decrypt(account.Password)
 
-	var extra map[string]interface{}
-	err = json.Unmarshal([]byte(account.Extra), &extra)
-	if err != nil {
-		return 0, "", errors.New("failed to parse account extra field as JSON: " + err.Error())
+	extra := map[string]interface{}(account.Extra)
+	if extra == nil {
+		return 0, "", errors.New("account extra field is empty")
 	}
 	switch account.Type {
 	case "chatgpt":

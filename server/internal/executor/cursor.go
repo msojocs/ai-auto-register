@@ -11,7 +11,6 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/msojocs/ai-auto-register/server/internal/core"
@@ -394,7 +393,7 @@ func (e *CursorExecutor) Execute(ctx context.Context, taskID uint, config map[st
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Encrypt error: %v", err), "failed")
 		return nil, err
 	}
-	extra := fmt.Sprintf(`{"token":"%s"}`, strings.ReplaceAll(token, `"`, `\"`))
+	extra := model.JSONMap{"token": token}
 	acct := &model.Account{
 		Email:       email,
 		Password:    encPass,

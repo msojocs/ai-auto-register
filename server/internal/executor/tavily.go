@@ -384,15 +384,14 @@ func (e *TavilyExecutor) Execute(ctx context.Context, taskID uint, config map[st
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Encrypt error: %v", err), "failed")
 		return nil, err
 	}
-	extraMap := map[string]string{"api_key": apiKey}
-	extraJSON, _ := json.Marshal(extraMap)
+	extraMap := model.JSONMap{"api_key": apiKey}
 	acct := &model.Account{
 		Email:       email,
 		Password:    encPass,
 		Type:        "tavily",
 		Status:      "active",
 		TaskBatchID: taskID,
-		Extra:       string(extraJSON),
+		Extra:       extraMap,
 	}
 
 	msg := fmt.Sprintf("✓ Tavily account registered: %s", email)

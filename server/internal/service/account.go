@@ -47,11 +47,11 @@ func (s *AccountService) Delete(id uint) error {
 }
 
 type exportRecord struct {
-	Email    string          `json:"email"`
-	Password string          `json:"password"`
-	Type     string          `json:"type"`
-	Status   string          `json:"status"`
-	Extra    json.RawMessage `json:"extra,omitempty"`
+	Email    string        `json:"email"`
+	Password string        `json:"password"`
+	Type     string        `json:"type"`
+	Status   string        `json:"status"`
+	Extra    model.JSONMap `json:"extra,omitempty"`
 }
 
 func (s *AccountService) Export(accountType string) ([]byte, error) {
@@ -66,16 +66,12 @@ func (s *AccountService) Export(accountType string) ([]byte, error) {
 		if decErr != nil {
 			password = ""
 		}
-		var extra json.RawMessage
-		if a.Extra != "" {
-			extra = json.RawMessage(a.Extra)
-		}
 		records = append(records, exportRecord{
 			Email:    a.Email,
 			Password: password,
 			Type:     a.Type,
 			Status:   a.Status,
-			Extra:    extra,
+			Extra:    a.Extra,
 		})
 	}
 	return json.Marshal(records)
@@ -83,11 +79,11 @@ func (s *AccountService) Export(accountType string) ([]byte, error) {
 
 // ImportAccountRecord is the shape of each item in an import JSON file.
 type ImportAccountRecord struct {
-	Email    string          `json:"email"`
-	Password string          `json:"password"`
-	Type     string          `json:"type"`
-	Status   string          `json:"status"`
-	Extra    json.RawMessage `json:"extra"`
+	Email    string        `json:"email"`
+	Password string        `json:"password"`
+	Type     string        `json:"type"`
+	Status   string        `json:"status"`
+	Extra    model.JSONMap `json:"extra"`
 }
 
 // ImportResult holds the outcome counts of an import operation.
@@ -121,10 +117,6 @@ func (s *AccountService) Import(records []ImportAccountRecord) (*ImportResult, e
 			result.Failed++
 			continue
 		}
-		extra := ""
-		if len(rec.Extra) > 0 {
-			extra = string(rec.Extra)
-		}
 		status := rec.Status
 		if status == "" {
 			status = "active"
@@ -134,7 +126,7 @@ func (s *AccountService) Import(records []ImportAccountRecord) (*ImportResult, e
 			Password: password,
 			Type:     rec.Type,
 			Status:   status,
-			Extra:    extra,
+			Extra:    rec.Extra,
 		}
 		if err := s.repo.Create(account); err != nil {
 			result.Failed++
@@ -334,11 +326,7 @@ func (s *AccountService) RefreshChatGPTToken(_ context.Context, id uint) (*ChatG
 		extra["access_token_expires_at"] = expiresAt
 	}
 
-	extraRaw, err := json.Marshal(extra)
-	if err != nil {
-		return nil, err
-	}
-	account.Extra = string(extraRaw)
+	account.Extra = extra
 	if err := s.repo.Update(account); err != nil {
 		return nil, err
 	}
@@ -452,12 +440,8 @@ func (s *AccountService) CheckAndRefreshAll(ctx context.Context) {
 
 // shouldRefreshToken returns true when the access_token_expires_at field is
 // within 24 hours of now (i.e. it is about to expire).
-func shouldRefreshToken(extraRaw string) bool {
-	if strings.TrimSpace(extraRaw) == "" {
-		return false
-	}
-	var extra map[string]interface{}
-	if err := json.Unmarshal([]byte(extraRaw), &extra); err != nil {
+func shouldRefreshToken(extra model.JSONMap) bool {
+	if len(extra) == 0 {
 		return false
 	}
 	expiresAtStr, _ := extra["access_token_expires_at"].(string)
@@ -513,15 +497,11 @@ func isUsageSaturatedBeforeReset(usage model.JSONMap) bool {
 	return time.Now().Before(time.Unix(resetAtUnix, 0))
 }
 
-func parseAccountExtra(raw string) (map[string]interface{}, error) {
-	if strings.TrimSpace(raw) == "" {
+func parseAccountExtra(raw model.JSONMap) (map[string]interface{}, error) {
+	if len(raw) == 0 {
 		return nil, errors.New("account extra field is empty")
 	}
-	var extra map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &extra); err != nil {
-		return nil, fmt.Errorf("failed to parse account extra field as JSON: %w", err)
-	}
-	return extra, nil
+	return raw, nil
 }
 
 func extractChatGPTAccountIDFromAccessToken(accessToken string) string {

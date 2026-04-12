@@ -913,12 +913,15 @@ executor_loop:
 		}
 	}
 
-	var extra string
+	var extra model.JSONMap
 	if stepContext.tokenInfo != nil {
-		if b, err := json.Marshal(stepContext.tokenInfo); err == nil {
-			extra = string(b)
-		} else {
-			return nil, fmt.Errorf("failed to marshal token info: %w", err)
+		extra = model.JSONMap{
+			"access_token":  stepContext.tokenInfo.AccessToken,
+			"refresh_token": stepContext.tokenInfo.RefreshToken,
+			"expires_in":    stepContext.tokenInfo.ExpiresIn,
+			"scope":         stepContext.tokenInfo.Scope,
+			"token_type":    stepContext.tokenInfo.TokenType,
+			"id_token":      stepContext.tokenInfo.IdToken,
 		}
 	}
 	p, err := crypto.Encrypt(stepContext.password)

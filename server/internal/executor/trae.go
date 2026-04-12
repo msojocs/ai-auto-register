@@ -302,15 +302,14 @@ func (e *TraeExecutor) Execute(ctx context.Context, taskID uint, config map[stri
 		sendProgress(publish, taskID, 100, fmt.Sprintf("Encrypt error: %v", err), "failed")
 		return nil, err
 	}
-	extraMap := map[string]string{"user_id": userID, "token": token, "region": region}
-	extraJSON, _ := json.Marshal(extraMap)
+	extraMap := model.JSONMap{"user_id": userID, "token": token, "region": region}
 	acct := &model.Account{
 		Email:       email,
 		Password:    encPass,
 		Type:        "trae",
 		Status:      "active",
 		TaskBatchID: taskID,
-		Extra:       string(extraJSON),
+		Extra:       extraMap,
 	}
 
 	return &ExecutionResult{
