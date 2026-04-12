@@ -225,6 +225,16 @@ export default function TaskList() {
     { title: t('common.id'), dataIndex: 'id', key: 'id' },
     { title: t('common.type'), dataIndex: 'type', key: 'type' },
     {
+      title: t('tasks.tempMailProvider'),
+      key: 'temp_mail_provider',
+      render: (_, record) => {
+        const providerId = record.config?.temp_mail_provider_id
+        if (!providerId) return '—'
+        const provider = tempMailProviders.find((p) => p.id === Number(providerId))
+        return provider ? provider.name : String(providerId)
+      },
+    },
+    {
       title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
