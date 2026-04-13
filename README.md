@@ -100,23 +100,82 @@ npm run dev
 | `DB_SSL_MODE` | `disable` | PostgreSQL SSL 模式 |
 | `DB_TIMEZONE` | `Local` | 数据库时区 |
 
-## API 概览
+## 使用
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/auth/login` | 登录，返回 JWT Token |
-| POST | `/api/auth/register` | 注册管理员 |
-| GET | `/api/dashboard/stats` | 仪表盘统计数据 |
-| GET/POST | `/api/tasks` | 任务列表 / 创建任务 |
-| POST | `/api/tasks/:id/start` | 启动任务 |
-| POST | `/api/tasks/:id/pause` | 暂停任务 |
-| GET | `/api/tasks/:id/progress` | SSE 实时进度流 |
-| GET | `/api/accounts` | 账号列表（支持平台/状态筛选）|
-| GET | `/api/accounts/export` | 导出 CSV 或 JSON |
-| GET/POST | `/api/proxies` | 代理列表 / 添加代理 |
-| POST | `/api/proxies/:id/test` | 测试代理连通性 |
-| GET/POST | `/api/mails` | 邮箱列表 / 添加邮箱 |
-| GET | `/api/captcha/stats` | 验证码费用统计 |
+```
+services:
+  server:
+    image: ghcr.io/msojocs/ai-auto-register/server:preview
+    container_name: ai-auto-register-server
+    restart: unless-stopped
+    ports:
+      - "8092:8080"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-16byte}
+      - GIN_MODE=release
+      - DB_DRIVER=sqlite
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-aar}
+      - DB_USER=${POSTGRES_USER:-aar}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-123456}
+    volumes:
+      - ./data:/app/data
+      # Mount config directory so config.yaml is available inside the container.
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  web:
+    image: ghcr.io/msojocs/ai-auto-register/web:preview
+    container_name: ai-auto-register-web
+    restart: unless-stopped
+    ports:
+      - "8091:80"
+    depends_on:
+      - server
+
+  token-server:
+    image: ghcr.io/msojocs/ai-auto-register/token-server:preview
+    container_name: ai-auto-register-token-server
+    restart: unless-stopped
+    ports:
+      - "8093:3000"
+  cli-proxy-api:
+    image: eceasy/cli-proxy-api:latest
+    pull_policy: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-none}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    container_name: cli-proxy-api
+    # env_file:
+    #   - .env
+    environment:
+      DEPLOY: ${DEPLOY:-}
+    ports:
+      - "8317:8317"
+      - "8085:8085"
+      - "1455:1455"
+      - "54545:54545"
+      - "51121:51121"
+      - "11451:11451"
+    volumes:
+      - ${CLI_PROXY_CONFIG_PATH:-./cpa/config.yaml}:/CLIProxyAPI/config.yaml
+      - ${CLI_PROXY_AUTH_PATH:-./cpa/auths}:/root/.cli-proxy-api
+      - ${CLI_PROXY_LOG_PATH:-./cpa/logs}:/CLIProxyAPI/logs
+    restart: unless-stopped
+volumes:
+  server-data:
+  postgres-data:
+```
 
 ## 感谢
 
