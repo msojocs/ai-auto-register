@@ -120,7 +120,7 @@ func (s *SentinelToken) Req(client *http.Client) (*SentinelInfo, error) {
 }
 
 func (s *SentinelToken) GetSentinelHeader() (map[string]string, error) {
-	var proof, turnstileToken string
+	var proof, turnstileToken, soToken string
 	{
 		url := s.baseUrl + "/turnstile"
 		if s.proof == "" || s.sentinelInfo == nil {
@@ -153,12 +153,14 @@ func (s *SentinelToken) GetSentinelHeader() (map[string]string, error) {
 		}
 		proof = data["enforcementToken"]
 		turnstileToken = data["turnstileToken"]
+		soToken = data["soToken"]
 	}
 
 	headers := map[string]string{
-		"p": proof,
-		"t": turnstileToken,
-		"c": s.sentinelInfo.Token,
+		"p":  proof,
+		"t":  turnstileToken,
+		"c":  s.sentinelInfo.Token,
+		"so": soToken,
 	}
 	return headers, nil
 

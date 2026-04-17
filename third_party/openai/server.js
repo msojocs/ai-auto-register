@@ -32,11 +32,17 @@ const server = http.createServer(async (req, res) => {
       const { TokenGenerator } = require("./utils/proof");
       const generator = new TokenGenerator();
       const enforcementToken = await generator.getEnforcementToken(data.sentinelInfo);
-      const result = await turnstile(data.proof, data.sentinelInfo);
+      const turnstileToken = await turnstile(data.proof, data.sentinelInfo);
+      let soToken = '';
+      if (data.sentinelInfo.so && data.sentinelInfo.so.required) {
+        const { so } = require("./utils/so");
+        soToken = await so(data.proof, data.sentinelInfo.so.collector_dx, data.sentinelInfo.so.snapshot_dx);
+      }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         enforcementToken,
-        turnstileToken: result,
+        turnstileToken: turnstileToken,
+        soToken: soToken,
       }));
     } catch (error) {
       console.error("Error in /turnstile:", error);

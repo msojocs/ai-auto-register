@@ -278,7 +278,7 @@ func (s *openAISession) prepareSession(ctx context.Context) (*openAIPrepareResul
 }
 
 // isEmailNeedSignUp submits the email to the auth0 signup endpoint.
-func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, prepareResult *openAIPrepareResult) (bool, error) {
+func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, prepareResult *openAIPrepareResult) (string, error) {
 	reqURL := fmt.Sprintf("%s/api/accounts/authorize/continue", s.authBaseURL)
 
 	josnBody := map[string]interface{}{
@@ -291,13 +291,13 @@ func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, pre
 	str, err := json.Marshal(josnBody)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(string(str)))
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
 	{
 		headers, err := s.sentinelToken.GetSentinelHeader()
 		if err != nil {
-			return false, fmt.Errorf("Check email: failed to get sentinel header: %w", err)
+			return "", fmt.Errorf("Check email: failed to get sentinel header: %w", err)
 		}
 		sentinelTokenMap := map[string]string{
 			"p":    headers["p"],
@@ -308,7 +308,7 @@ func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, pre
 		}
 		sentinelToken, err := json.Marshal(sentinelTokenMap)
 		if err != nil {
-			return false, fmt.Errorf("Failed to marshal sentinel token: %w", err)
+			return "", fmt.Errorf("Failed to marshal sentinel token: %w", err)
 		}
 		s.fillBaseHeaders(req)
 		req.Header.Set("User-Agent", chatGPTUA)
@@ -319,12 +319,12 @@ func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, pre
 
 	resp, err := s.noRedirect.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("Failed to execute request: %w", err)
+		return "", fmt.Errorf("Failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("Failed to read response body: %w", err)
+		return "", fmt.Errorf("Failed to read response body: %w", err)
 	}
 	var continueResult struct {
 		Page struct {
@@ -332,20 +332,10 @@ func (s *openAISession) isEmailNeedSignUp(ctx context.Context, email string, pre
 		} `json:"page"`
 	}
 	if err := json.Unmarshal(body, &continueResult); err != nil {
-		return false, fmt.Errorf("Failed to parse response: %w", err)
+		return "", fmt.Errorf("Failed to parse response: %w", err)
 	}
 
-	switch continueResult.Page.Type {
-	case "email_otp_verification":
-		// otp验证，邮箱已经被使用了，不需要注册
-		return false, nil
-	case "create_account_password":
-		// 填写密码，邮箱没被使用了，需要注册
-		return true, nil
-	default:
-		// 非预期的响应类型
-		return false, fmt.Errorf("Unexpected page type: %s; response: %s", continueResult.Page.Type, string(body))
-	}
+	return continueResult.Page.Type, nil
 
 }
 
@@ -544,9 +534,21 @@ func (s *openAISession) createAccount(ctx context.Context, prepareResult *openAI
 			return "", fmt.Errorf("chatgpt createAccount: failed to marshal sentinel token: %w", err)
 		}
 
+		soTokenMap := map[string]string{
+			"so":   headers["so"],
+			"c":    headers["c"],
+			"id":   prepareResult.OaiDid,
+			"flow": "oauth_create_account",
+		}
+		soToken, err := json.Marshal(soTokenMap)
+		if err != nil {
+			return "", fmt.Errorf("chatgpt createAccount: failed to marshal so token: %w", err)
+		}
+
 		s.fillJsonHeaders(req)
 		req.Header.Set("Referer", "https://auth.openai.com/about-you")
 		req.Header.Set("openai-sentinel-token", string(sentinelToken))
+		req.Header.Set("openai-sentinel-so-token", string(soToken))
 	}
 	resp, err := s.noRedirect.Do(req)
 	if err != nil {
@@ -814,15 +816,22 @@ executor_loop:
 			e.step = "check_email"
 		case "check_email":
 			sendProgress(publish, taskID, 40, "Checking if email needs sign-up…", "running")
-			needSignUp, err := sess.isEmailNeedSignUp(ctx, email, stepContext.prepareResult)
+			nextPage, err := sess.isEmailNeedSignUp(ctx, email, stepContext.prepareResult)
 			if err != nil {
-				sendProgress(publish, taskID, 100, fmt.Sprintf("Check email failed: %v", err), "failed")
 				return nil, err
 			}
-			if needSignUp {
-				e.step = "set_password"
-			} else {
+
+			switch nextPage {
+			case "email_otp_verification":
+				// otp验证，邮箱已经被使用了，不需要注册
 				e.step = "wait_for_otp"
+			case "create_account_password":
+				// 填写密码，邮箱没被使用了，需要注册
+				e.step = "set_password"
+			default:
+				sendProgress(publish, taskID, 100, fmt.Sprintf("Check email failed: %v", err), "failed")
+				// 非预期的响应类型
+				return nil, fmt.Errorf("Unexpected page type: %s", nextPage)
 			}
 		case "set_password":
 			// Set password
