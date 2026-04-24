@@ -330,9 +330,8 @@ func (s *AccountService) RefreshChatGPTToken(_ context.Context, id uint) (*ChatG
 		extra["account_id"] = newAccountID
 	}
 
-	expiresAt := ""
-	if refreshResp.ExpiresIn > 0 {
-		expiresAt = time.Now().Add(time.Duration(refreshResp.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
+	expiresAt := extractAccessTokenExpiresAt(refreshResp.AccessToken)
+	if strings.TrimSpace(expiresAt) != "" {
 		extra["access_token_expires_at"] = expiresAt
 	}
 
@@ -426,11 +425,6 @@ func (s *AccountService) CheckAndRefreshAll(ctx context.Context) {
 			continue
 		}
 
-		if isUsageSaturatedBeforeReset(a.Usage) {
-			log.Printf("[account-check] skipping account %d (%s): usage 100%% and reset not reached", a.ID, a.Email)
-			continue
-		}
-
 		if a.Type == "chatgpt" {
 			if shouldRefreshToken(a.Extra) {
 				log.Printf("[account-check] refreshing near-expiry token for account %d (%s)", a.ID, a.Email)
@@ -438,6 +432,11 @@ func (s *AccountService) CheckAndRefreshAll(ctx context.Context) {
 					log.Printf("[account-check] token refresh failed for account %d: %v", a.ID, err)
 				}
 			}
+		}
+
+		if isUsageSaturatedBeforeReset(a.Usage) {
+			log.Printf("[account-check] skipping account %d (%s): usage 100%% and reset not reached", a.ID, a.Email)
+			continue
 		}
 
 		log.Printf("[account-check] checking account %d (%s)", a.ID, a.Email)
@@ -448,15 +447,20 @@ func (s *AccountService) CheckAndRefreshAll(ctx context.Context) {
 	log.Printf("[account-check] done, processed %d accounts", len(accounts))
 }
 
-// shouldRefreshToken returns true when the access_token_expires_at field is
-// within 24 hours of now (i.e. it is about to expire).
+// shouldRefreshToken returns true when the access token is within 24 hours of
+// expiry. It prefers extracting exp from access_token and falls back to the
+// legacy access_token_expires_at field.
 func shouldRefreshToken(extra model.JSONMap) bool {
 	if len(extra) == 0 {
 		return false
 	}
-	expiresAtStr, _ := extra["access_token_expires_at"].(string)
+	accessToken, _ := extra["access_token"].(string)
+	expiresAtStr := extractAccessTokenExpiresAt(accessToken)
 	if strings.TrimSpace(expiresAtStr) == "" {
-		return false
+		expiresAtStr, _ = extra["access_token_expires_at"].(string)
+		if strings.TrimSpace(expiresAtStr) == "" {
+			return false
+		}
 	}
 	expiresAt, err := time.Parse(time.RFC3339, expiresAtStr)
 	if err != nil {
@@ -514,17 +518,38 @@ func parseAccountExtra(raw model.JSONMap) (map[string]interface{}, error) {
 	return raw, nil
 }
 
-func extractChatGPTAccountIDFromAccessToken(accessToken string) string {
-	parts := strings.Split(accessToken, ".")
-	if len(parts) < 2 {
-		return ""
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+func extractAccessTokenExpiresAt(accessToken string) string {
+	payloadData, err := decodeJWTPayload(accessToken)
 	if err != nil {
 		return ""
 	}
-	var payloadData map[string]interface{}
-	if err := json.Unmarshal(payload, &payloadData); err != nil {
+
+	var expUnix int64
+	switch v := payloadData["exp"].(type) {
+	case float64:
+		expUnix = int64(v)
+	case int64:
+		expUnix = v
+	case int:
+		expUnix = int64(v)
+	case json.Number:
+		expUnix, err = v.Int64()
+		if err != nil {
+			return ""
+		}
+	default:
+		return ""
+	}
+
+	if expUnix <= 0 {
+		return ""
+	}
+	return time.Unix(expUnix, 0).UTC().Format(time.RFC3339)
+}
+
+func extractChatGPTAccountIDFromAccessToken(accessToken string) string {
+	payloadData, err := decodeJWTPayload(accessToken)
+	if err != nil {
 		return ""
 	}
 	authData, ok := payloadData["https://api.openai.com/auth"].(map[string]interface{})
@@ -533,6 +558,22 @@ func extractChatGPTAccountIDFromAccessToken(accessToken string) string {
 	}
 	accountID, _ := authData["chatgpt_account_id"].(string)
 	return strings.TrimSpace(accountID)
+}
+
+func decodeJWTPayload(accessToken string) (map[string]interface{}, error) {
+	parts := strings.Split(accessToken, ".")
+	if len(parts) < 2 {
+		return nil, errors.New("invalid jwt format")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, err
+	}
+	var payloadData map[string]interface{}
+	if err := json.Unmarshal(payload, &payloadData); err != nil {
+		return nil, err
+	}
+	return payloadData, nil
 }
 
 func usageResponseToMap(usageResp *openai.CodexUsageResponse) (model.JSONMap, error) {
@@ -563,8 +604,7 @@ func deriveFailedStatus(err error) string {
 		return "pending"
 	}
 	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "403") ||
-		strings.Contains(msg, "forbidden") ||
+	if strings.Contains(msg, "forbidden") ||
 		strings.Contains(msg, "banned") ||
 		strings.Contains(msg, "suspended") ||
 		strings.Contains(msg, "deactivated") {
