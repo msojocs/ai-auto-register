@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"strings"
 
 	"golang.org/x/net/publicsuffix"
 )
@@ -130,7 +132,7 @@ func (c *CodexClient) QueryUsage() (*CodexUsageResponse, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, unexpectedStatusWithBody(resp.StatusCode, resp.Body)
 	}
 
 	var usageResp CodexUsageResponse
@@ -157,7 +159,7 @@ func (c *CodexClient) CheckAccount() (*CodexAccountCheckResponse, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, unexpectedStatusWithBody(resp.StatusCode, resp.Body)
 	}
 
 	var accountResp CodexAccountCheckResponse
@@ -199,7 +201,7 @@ func (c *CodexClient) RefreshToken() (*CodexRefreshTokenResponse, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, unexpectedStatusWithBody(resp.StatusCode, resp.Body)
 	}
 
 	var refreshResp CodexRefreshTokenResponse
@@ -210,4 +212,22 @@ func (c *CodexClient) RefreshToken() (*CodexRefreshTokenResponse, error) {
 	c.refreshToken = refreshResp.RefreshToken
 
 	return &refreshResp, nil
+}
+
+func unexpectedStatusWithBody(statusCode int, body io.Reader) error {
+	bodyBytes, err := io.ReadAll(body)
+	if err != nil {
+		return fmt.Errorf("unexpected status code: %d, body read error: %v", statusCode, err)
+	}
+
+	bodyText := strings.TrimSpace(string(bodyBytes))
+	if bodyText == "" {
+		return fmt.Errorf("unexpected status code: %d, body: <empty>", statusCode)
+	}
+
+	const maxBodyLen = 2048
+	if len(bodyText) > maxBodyLen {
+		bodyText = bodyText[:maxBodyLen] + "...(truncated)"
+	}
+	return fmt.Errorf("unexpected status code: %d, body: %s", statusCode, bodyText)
 }

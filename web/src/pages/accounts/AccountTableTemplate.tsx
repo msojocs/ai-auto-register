@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, type Key, type ReactNode } from 'react'
 import { Table, Button, Space, Select, Typography, message, Dropdown, Popconfirm } from 'antd'
 import { DownloadOutlined, ReloadOutlined, UploadOutlined, SafetyOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -15,6 +15,7 @@ interface AccountTableTemplateProps {
   accountType?: string
   extraColumns?: ColumnsType<Account>
   hideTypeColumn?: boolean
+  renderExtraActions?: (record: Account) => ReactNode
 }
 
 export default function AccountTableTemplate({
@@ -22,6 +23,7 @@ export default function AccountTableTemplate({
   accountType,
   extraColumns,
   hideTypeColumn = false,
+  renderExtraActions,
 }: AccountTableTemplateProps) {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(false)
@@ -30,6 +32,9 @@ export default function AccountTableTemplate({
   const [pushingKey, setPushingKey] = useState<string | null>(null)
   const [checkingId, setCheckingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [batchChecking, setBatchChecking] = useState(false)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
+  const [checkStatusMap, setCheckStatusMap] = useState<Record<number, 'success' | 'failed'>>({})
   const { t } = useTranslation()
 
   const statusOptions = [
@@ -103,27 +108,63 @@ export default function AccountTableTemplate({
   )
 
   const handleCheckAccount = useCallback(
-    async (account: Account) => {
+    async (account: Account): Promise<boolean> => {
       setCheckingId(account.id)
       try {
         const { data } = await checkAccount(account.id)
         if (!data.supported) {
           message.warning(t('accounts.checkUnsupported'))
-          return
+          return false
         }
         if (data.valid) {
+          setCheckStatusMap((prev) => ({ ...prev, [account.id]: 'success' }))
           message.success(t('accounts.checkSuccess'))
-          return
+          return true
         }
+        setCheckStatusMap((prev) => ({ ...prev, [account.id]: 'failed' }))
         message.error(t('accounts.checkInvalid', { message: data.message }))
-      } catch {
-        message.error(t('accounts.checkFailed'))
+        return false
+      } catch (err) {
+        setCheckStatusMap((prev) => ({ ...prev, [account.id]: 'failed' }))
+        message.error(
+          t('accounts.checkFailed', {
+            message: err instanceof Error ? err.message : 'unknown error',
+          }),
+        )
+        return false
       } finally {
         setCheckingId(null)
       }
     },
     [t],
   )
+
+  const handleBatchCheck = useCallback(async () => {
+    const selectedAccounts = accounts.filter((account) => selectedRowKeys.includes(account.id))
+    if (selectedAccounts.length === 0) {
+      message.warning(t('accounts.batchCheckSelectFirst'))
+      return
+    }
+
+    setBatchChecking(true)
+    let successCount = 0
+    try {
+      for (const account of selectedAccounts) {
+        // Run sequentially to avoid overwhelming upstream APIs.
+        const ok = await handleCheckAccount(account)
+        if (ok) successCount += 1
+      }
+      message.info(
+        t('accounts.batchCheckSummary', {
+          total: selectedAccounts.length,
+          success: successCount,
+          failed: selectedAccounts.length - successCount,
+        }),
+      )
+    } finally {
+      setBatchChecking(false)
+    }
+  }, [accounts, handleCheckAccount, selectedRowKeys, t])
 
   const handleDeleteAccount = useCallback(
     async (id: number) => {
@@ -177,6 +218,13 @@ export default function AccountTableTemplate({
             onClick: () => void handlePushToTemplate(record, tmpl.id, tmpl.name),
           }))
 
+          const checkStatus = checkStatusMap[record.id]
+          const checkButtonStyle = checkStatus === 'success'
+            ? { backgroundColor: '#52c41a', borderColor: '#52c41a', color: '#fff' }
+            : checkStatus === 'failed'
+              ? { backgroundColor: '#ff4d4f', borderColor: '#ff4d4f', color: '#fff' }
+              : undefined
+
           return (
             <Space>
               <Button
@@ -184,9 +232,11 @@ export default function AccountTableTemplate({
                 icon={<SafetyOutlined />}
                 loading={checkingId === record.id}
                 onClick={() => void handleCheckAccount(record)}
+                style={checkButtonStyle}
               >
                 {t('accounts.check')}
               </Button>
+              {renderExtraActions ? renderExtraActions(record) : null}
               <Dropdown
                 menu={{
                   items: menuItems.length > 0
@@ -223,6 +273,7 @@ export default function AccountTableTemplate({
     return baseColumns
   }, [
     checkingId,
+    checkStatusMap,
     deletingId,
     extraColumns,
     fetchAccounts,
@@ -232,6 +283,7 @@ export default function AccountTableTemplate({
     handlePushToTemplate,
     hideTypeColumn,
     pushingKey,
+    renderExtraActions,
     t,
     templatesByType,
   ])
@@ -243,6 +295,14 @@ export default function AccountTableTemplate({
           {title}
         </Title>
         <Space>
+          <Button
+            icon={<SafetyOutlined />}
+            onClick={() => void handleBatchCheck()}
+            disabled={selectedRowKeys.length === 0}
+            loading={batchChecking}
+          >
+            {t('accounts.batchCheck')}
+          </Button>
           <Button icon={<ReloadOutlined />} onClick={() => void fetchAccounts()} loading={loading}>
             {t('accounts.refresh')}
           </Button>
@@ -268,6 +328,10 @@ export default function AccountTableTemplate({
         columns={columns}
         dataSource={accounts}
         rowKey="id"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+        }}
         loading={loading}
         pagination={{ pageSize: 20 }}
       />

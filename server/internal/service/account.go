@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/msojocs/free2api/server/internal/model"
 	"github.com/msojocs/free2api/server/internal/repository"
@@ -66,10 +67,30 @@ type AccountCheckResult struct {
 	Message   string `json:"message"`
 }
 
+type ChatGPTRefreshTokenResult struct {
+	AccountID            string `json:"account_id"`
+	AccessToken          string `json:"access_token"`
+	AccessTokenExpiresAt string `json:"access_token_expires_at,omitempty"`
+	RefreshToken         string `json:"refresh_token"`
+}
+
+type ChatGPTAccountDetailResult struct {
+	AccountID        string                     `json:"account_id"`
+	DefaultAccountID string                     `json:"default_account_id,omitempty"`
+	Email            string                     `json:"email,omitempty"`
+	PlanType         string                     `json:"plan_type,omitempty"`
+	Accounts         []openai.CodexAccount      `json:"accounts,omitempty"`
+	Usage            *openai.CodexUsageResponse `json:"usage,omitempty"`
+	Extra            map[string]interface{}     `json:"extra,omitempty"`
+}
+
 func (s *AccountService) Check(ctx context.Context, id uint) (*AccountCheckResult, error) {
 	account, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, err
+	}
+	if account == nil {
+		return nil, errors.New("account not found")
 	}
 
 	switch account.Type {
@@ -123,6 +144,138 @@ func (s *AccountService) checkChatGPTAccount(_ context.Context, account *model.A
 		Supported: true,
 		Valid:     true,
 		Message:   "access token is valid",
+	}, nil
+}
+
+func (s *AccountService) RefreshChatGPTToken(_ context.Context, id uint) (*ChatGPTRefreshTokenResult, error) {
+	account, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if account == nil {
+		return nil, errors.New("account not found")
+	}
+	if account.Type != "chatgpt" {
+		return nil, errors.New("account type is not chatgpt")
+	}
+
+	extra, err := parseAccountExtra(account.Extra)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, _ := extra["refresh_token"].(string)
+	if strings.TrimSpace(refreshToken) == "" {
+		return nil, errors.New("missing refresh_token in account extra field")
+	}
+
+	accessToken, _ := extra["access_token"].(string)
+	accountID, _ := extra["account_id"].(string)
+	if strings.TrimSpace(accountID) == "" {
+		accountID = extractChatGPTAccountIDFromAccessToken(accessToken)
+	}
+
+	client, err := openai.NewCodexClient(openai.CodexConfig{
+		AccountId:    accountID,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	refreshResp, err := client.RefreshToken()
+	if err != nil {
+		return nil, err
+	}
+
+	extra["access_token"] = refreshResp.AccessToken
+	extra["refresh_token"] = refreshResp.RefreshToken
+
+	newAccountID := extractChatGPTAccountIDFromAccessToken(refreshResp.AccessToken)
+	if strings.TrimSpace(newAccountID) == "" {
+		newAccountID = accountID
+	}
+	if strings.TrimSpace(newAccountID) != "" {
+		extra["account_id"] = newAccountID
+	}
+
+	expiresAt := ""
+	if refreshResp.ExpiresIn > 0 {
+		expiresAt = time.Now().Add(time.Duration(refreshResp.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
+		extra["access_token_expires_at"] = expiresAt
+	}
+
+	extraRaw, err := json.Marshal(extra)
+	if err != nil {
+		return nil, err
+	}
+	account.Extra = string(extraRaw)
+	if err := s.repo.Update(account); err != nil {
+		return nil, err
+	}
+
+	return &ChatGPTRefreshTokenResult{
+		AccountID:            newAccountID,
+		AccessToken:          refreshResp.AccessToken,
+		AccessTokenExpiresAt: expiresAt,
+		RefreshToken:         refreshResp.RefreshToken,
+	}, nil
+}
+
+func (s *AccountService) GetChatGPTDetail(_ context.Context, id uint) (*ChatGPTAccountDetailResult, error) {
+	account, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if account == nil {
+		return nil, errors.New("account not found")
+	}
+	if account.Type != "chatgpt" {
+		return nil, errors.New("account type is not chatgpt")
+	}
+
+	extra, err := parseAccountExtra(account.Extra)
+	if err != nil {
+		return nil, err
+	}
+	accessToken, _ := extra["access_token"].(string)
+	if strings.TrimSpace(accessToken) == "" {
+		return nil, errors.New("missing access_token in account extra field")
+	}
+
+	accountID, _ := extra["account_id"].(string)
+	if strings.TrimSpace(accountID) == "" {
+		accountID = extractChatGPTAccountIDFromAccessToken(accessToken)
+	}
+	if strings.TrimSpace(accountID) == "" {
+		return nil, errors.New("missing account_id in account extra field")
+	}
+
+	client, err := openai.NewCodexClient(openai.CodexConfig{
+		AccountId:   accountID,
+		AccessToken: accessToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	checkResp, err := client.CheckAccount()
+	if err != nil {
+		return nil, err
+	}
+	usageResp, err := client.QueryUsage()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ChatGPTAccountDetailResult{
+		AccountID:        accountID,
+		DefaultAccountID: checkResp.DefaultAccountId,
+		Email:            usageResp.Email,
+		PlanType:         usageResp.PlanType,
+		Accounts:         checkResp.Accounts,
+		Usage:            usageResp,
+		Extra:            extra,
 	}, nil
 }
 

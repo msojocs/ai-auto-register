@@ -90,6 +90,8 @@ func SetupRouter(
 			accounts.DELETE("/:id", accountH.Delete)
 			accounts.GET("/export", accountH.Export)
 			accounts.POST("/:id/check", accountH.Check)
+			accounts.POST("/:id/chatgpt/refresh-token", accountH.RefreshChatGPTToken)
+			accounts.GET("/:id/chatgpt/detail", accountH.ChatGPTDetail)
 		}
 
 		proxies := api.Group("/proxies")

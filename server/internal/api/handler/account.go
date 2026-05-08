@@ -74,3 +74,35 @@ func (h *AccountHandler) Check(c *gin.Context) {
 
 	c.JSON(http.StatusOK, OK(result))
 }
+
+func (h *AccountHandler) RefreshChatGPTToken(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
+		return
+	}
+
+	result, err := h.svc.RefreshChatGPTToken(c.Request.Context(), uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, OK(result))
+}
+
+func (h *AccountHandler) ChatGPTDetail(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Fail(400, "invalid id"))
+		return
+	}
+
+	result, err := h.svc.GetChatGPTDetail(c.Request.Context(), uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Fail(500, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, OK(result))
+}

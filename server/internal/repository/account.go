@@ -20,6 +20,10 @@ func (r *accountRepository) Create(account *model.Account) error {
 	return r.db.Create(account).Error
 }
 
+func (r *accountRepository) Update(account *model.Account) error {
+	return r.db.Save(account).Error
+}
+
 func (r *accountRepository) FindByID(id uint) (*model.Account, error) {
 	var account model.Account
 	err := r.db.First(&account, id).Error

@@ -121,8 +121,12 @@ export default function AccountList() {
           return
         }
         message.error(t('accounts.checkInvalid', { message: data.message }))
-      } catch {
-        message.error(t('accounts.checkFailed'))
+      } catch (err) {
+        message.error(
+          t('accounts.checkFailed', {
+            message: err instanceof Error ? err.message : 'unknown error',
+          }),
+        )
       } finally {
         setCheckingId(null)
       }
