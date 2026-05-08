@@ -96,10 +96,20 @@ export default function TaskList() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (wizardOpen) {
+      form.setFieldsValue(wizardValues)
+    }
+  }, [currentStep, form, wizardOpen, wizardValues])
+
   function openWizard() {
+    const initialValues: WizardValues = {
+      concurrency: 5,
+      interval_seconds: 5,
+    }
     setCurrentStep(0)
-    setWizardValues({})
-    form.resetFields()
+    setWizardValues(initialValues)
+    form.setFieldsValue(initialValues)
     setWizardOpen(true)
   }
 
@@ -110,7 +120,6 @@ export default function TaskList() {
 
     if (currentStep < 2) {
       setCurrentStep((s) => s + 1)
-      form.resetFields()
     } else {
       setSubmitting(true)
       try {
@@ -139,6 +148,13 @@ export default function TaskList() {
         setSubmitting(false)
       }
     }
+  }
+
+  function handlePrevStep() {
+    const vals = form.getFieldsValue()
+    const merged = { ...wizardValues, ...vals }
+    setWizardValues(merged)
+    setCurrentStep((s) => Math.max(0, s - 1))
   }
 
   async function handleStart(id: number) {
@@ -313,7 +329,7 @@ export default function TaskList() {
         footer={
           <Space>
             {currentStep > 0 && (
-              <Button onClick={() => setCurrentStep((s) => s - 1)}>{t('common.back')}</Button>
+              <Button onClick={handlePrevStep}>{t('common.back')}</Button>
             )}
             <Button onClick={() => setWizardOpen(false)}>{t('common.cancel')}</Button>
             <Button
